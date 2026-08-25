@@ -21,7 +21,7 @@ npm install
 npm run dev
 ```
 
-The application stores changes in browser `localStorage`. Records remain available in the same browser until site data is cleared. Use **Export JSON** for portable backups and transfer between devices.
+The application stores changes in browser `localStorage`. Records remain available in the same browser until site data is cleared. Use **Export package** for portable backups and transfer between devices. The custom `.network-register.json` profile contains format and compatibility metadata plus the complete register, including sites, assets, connections, IP plans and topology positions. Import also accepts legacy raw register JSON.
 
 Verify a release with:
 
