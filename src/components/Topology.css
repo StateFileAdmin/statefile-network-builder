@@ -1,0 +1,28 @@
+.react-flow__edgelabel-renderer {
+  z-index: 6;
+}
+
+.edge-label {
+  position: absolute;
+  z-index: 6;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  padding: 4px 8px;
+  border: 1px solid #304761;
+  border-radius: 5px;
+  background: rgba(8, 17, 31, 0.96);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.42);
+  color: #cbd8e6;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.edge-label-future {
+  border-color: #61599a;
+  background: rgba(22, 20, 45, 0.96);
+  color: #c8c0fb;
+}
