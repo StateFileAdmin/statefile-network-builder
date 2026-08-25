@@ -1,0 +1,23 @@
+.site-custom-select {
+  width: 330px;
+}
+.site-custom-select .select-trigger {
+  border-color: transparent;
+  background: transparent;
+  padding: 2px 0;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.site-custom-select .select-trigger:hover,
+.site-custom-select .custom-select.is-open .select-trigger {
+  border-color: transparent;
+  background: transparent;
+}
+.site-custom-select .select-menu {
+  top: calc(100% + 8px);
+  min-width: 360px;
+}
+.site-custom-select .select-option {
+  padding: 10px;
+}
