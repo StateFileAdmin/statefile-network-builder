@@ -1,0 +1,327 @@
+.account-panel {
+  position: relative;
+  width: min(980px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  scrollbar-width: none;
+  border: 1px solid #355473;
+  border-radius: 13px;
+  background: #0c1828;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
+}
+.account-panel::-webkit-scrollbar {
+  display: none;
+}
+.account-panel > header {
+  display: flex;
+  justify-content: space-between;
+  padding: 21px 23px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.account-panel h2 {
+  margin: 2px 0 3px;
+  font-size: 20px;
+}
+.account-panel header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.account-panel > nav {
+  display: flex;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--line);
+}
+.account-panel > nav button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+}
+.account-panel > nav button.active {
+  color: var(--text);
+  border-bottom-color: var(--blue);
+}
+.account-content {
+  padding: 18px 22px;
+}
+.account-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 13px;
+}
+.account-toolbar p {
+  max-width: 610px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.user-list {
+  display: grid;
+  gap: 9px;
+}
+.user-editor {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.4fr) 140px 130px auto auto;
+  align-items: center;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0f1d2e;
+}
+.user-identity b,
+.user-identity small {
+  display: block;
+}
+.user-identity b {
+  font-size: 11px;
+}
+.user-identity small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 9px;
+}
+.scope-all,
+.site-assignments label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #9cadc1;
+  font-size: 9px;
+}
+.site-assignments {
+  grid-column: 1/-1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 7px;
+  border-top: 1px solid var(--line);
+}
+.field-error {
+  grid-column: 1/-1;
+  color: #ef9096;
+}
+.account-panel > footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 22px;
+  border-top: 1px solid var(--line);
+}
+.security-list {
+  display: grid;
+  gap: 7px;
+}
+.security-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+.security-row svg {
+  color: #8297ad;
+}
+.security-row.severity-warning svg {
+  color: var(--amber);
+}
+.security-row.severity-critical {
+  border-color: #713e46;
+}
+.security-row.severity-critical svg {
+  color: var(--red);
+}
+.security-row b,
+.security-row small {
+  display: block;
+}
+.security-row b {
+  text-transform: capitalize;
+  font-size: 10px;
+}
+.security-row small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 8px;
+}
+.account-empty,
+.staff-summary {
+  text-align: center;
+  color: var(--muted);
+}
+.staff-summary h3 {
+  color: var(--text);
+}
+.account-error {
+  margin: 10px 22px;
+  padding: 8px;
+  border: 1px solid #713e46;
+  border-radius: 6px;
+  color: #ef9096;
+  font-size: 9px;
+}
+.nested-modal {
+  position: fixed;
+  z-index: 75;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(2, 7, 14, 0.78);
+}
+.nested-modal > div {
+  width: min(520px, calc(100vw - 60px));
+  border: 1px solid #355473;
+  border-radius: 11px;
+  background: #0c1828;
+  box-shadow: 0 30px 90px #000;
+}
+.nested-modal header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 19px;
+  border-bottom: 1px solid var(--line);
+}
+.nested-modal h3 {
+  margin: 0;
+}
+.invite-fields {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+}
+.invite-fields > label > span {
+  display: block;
+  margin-bottom: 5px;
+  color: #9cadc1;
+  font-size: 9px;
+}
+.invite-fields input[type="email"],
+.invite-fields input:not([type]) {
+  width: 100%;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #081421;
+  color: var(--text);
+}
+.invite-result {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  padding: 24px;
+  text-align: center;
+}
+.invite-result p {
+  color: var(--muted);
+  font-size: 10px;
+}
+.invite-result code {
+  width: 100%;
+  padding: 9px;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #081421;
+  color: #9fcdf0;
+  font-size: 8px;
+}
+.invite-result button {
+  margin-top: 13px;
+}
+@media (max-width: 900px) {
+  .user-editor {
+    grid-template-columns: 1fr 1fr;
+  }
+  .user-identity {
+    grid-column: 1/-1;
+  }
+}
+.scope-all {
+  width: max-content;
+  padding: 8px 10px;
+  border: 1px solid #29445f;
+  border-radius: 7px;
+  background: #0b1928;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.scope-all:has(input:checked) {
+  border-color: #3f7fae;
+  background: #102b43;
+  color: #d8ebfa;
+}
+.scope-all input,
+.site-assignments input {
+  appearance: none;
+  -webkit-appearance: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  margin: 0;
+  border: 1px solid #48637c;
+  border-radius: 5px;
+  background: #071321;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    box-shadow 0.15s;
+}
+.scope-all input::after,
+.site-assignments input::after {
+  content: "✓";
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  transform: scale(0);
+  transition: transform 0.12s;
+}
+.scope-all input:checked,
+.site-assignments input:checked {
+  border-color: #62afe4;
+  background: #2778ad;
+  box-shadow: 0 0 0 3px rgba(63, 145, 199, 0.14);
+}
+.scope-all input:checked::after,
+.site-assignments input:checked::after {
+  transform: scale(1);
+}
+.scope-all input:focus-visible,
+.site-assignments input:focus-visible {
+  outline: 2px solid #76bff0;
+  outline-offset: 2px;
+}
+.site-assignments label {
+  padding: 7px 9px;
+  border: 1px solid #263b50;
+  border-radius: 7px;
+  background: #0a1725;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    color 0.15s;
+}
+.site-assignments label:has(input:checked) {
+  border-color: #3f7fae;
+  background: #102b43;
+  color: #d8ebfa;
+}
+.invite-result button.copied {
+  border-color: #4fc58a !important;
+  background: #176b48 !important;
+  color: #effff7 !important;
+  box-shadow: 0 0 0 3px rgba(79, 197, 138, 0.18);
+}
+.invite-result button.copied svg {
+  stroke: #effff7;
+}

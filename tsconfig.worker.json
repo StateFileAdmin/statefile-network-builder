@@ -11,5 +11,12 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src/worker.ts", "src/data/seed.ts", "src/types.ts"]
+  "include": [
+    "src/worker.ts",
+    "src/auth.ts",
+    "src/admin.ts",
+    "src/data/seed.ts",
+    "src/data/validation.ts",
+    "src/types.ts"
+  ]
 }

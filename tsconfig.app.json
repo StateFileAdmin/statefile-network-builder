@@ -2,11 +2,7 @@
   "compilerOptions": {
     "target": "ES2022",
     "useDefineForClassFields": true,
-    "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -18,13 +14,10 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+    "types": ["vite/client"],
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": [
-    "src"
-  ],
-  "exclude": [
-    "src/worker.ts"
-  ]
+  "include": ["src"],
+  "exclude": ["src/worker.ts", "src/auth.ts", "src/admin.ts"]
 }

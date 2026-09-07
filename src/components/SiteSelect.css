@@ -21,3 +21,23 @@
 .site-custom-select .select-option {
   padding: 10px;
 }
+
+.header-site-select {
+  width: 240px;
+}
+.header-site-select .select-trigger {
+  width: 100%;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border-color: #29445f;
+  background: #0d1c2d;
+  font-size: 12px;
+}
+.header-site-select .select-trigger > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.header-site-select .select-menu {
+  min-width: 350px;
+}

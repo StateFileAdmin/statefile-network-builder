@@ -1,1 +1,164 @@
-.custom-select,.date-picker{position:relative;width:100%}.select-trigger,.date-trigger{width:100%;min-height:35px;justify-content:space-between;border:1px solid var(--line);background:#081421;color:var(--text);padding:8px 9px;border-radius:6px;outline:0}.select-trigger:hover,.date-trigger:hover,.custom-select.is-open .select-trigger{border-color:#4d85b1;background:#0b1a2a}.select-trigger svg{color:#7f94aa;transition:transform .15s}.custom-select.is-open .select-trigger>svg{transform:rotate(180deg)}.select-menu{position:absolute;z-index:80;top:calc(100% + 5px);left:0;right:0;max-height:260px;overflow:auto;padding:5px;border:1px solid #355473;border-radius:8px;background:#0d1b2c;box-shadow:0 14px 38px rgba(0,0,0,.46)}.select-option{width:100%;justify-content:space-between;text-align:left;border:0;background:transparent;padding:8px 9px}.select-option:hover,.select-option[aria-selected=true]{background:#172d44}.select-option b,.select-option small{display:block}.select-option b{font-size:11px;font-weight:550}.select-option small{margin-top:2px;color:var(--muted);font-size:9px}.select-option>svg{flex:0 0 auto;color:#73b7e9}.date-trigger{justify-content:flex-start;color:#72869e}.date-trigger.has-value{color:var(--text)}.date-trigger>span{flex:1;text-align:left}.date-trigger>svg:first-child{color:#73aede}.date-clear{color:#788da5}.calendar-popover{position:absolute;z-index:80;top:calc(100% + 5px);right:0;width:270px;padding:10px;border:1px solid #355473;border-radius:9px;background:#0d1b2c;box-shadow:0 16px 42px rgba(0,0,0,.5)}.calendar-popover header{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}.calendar-popover header b{font-size:11px}.calendar-popover button{border:0;background:transparent;padding:6px}.calendar-weekdays,.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}.calendar-weekdays span{text-align:center;padding:4px 0;color:#6f849a;font-size:9px}.calendar-grid button{aspect-ratio:1;border-radius:5px;color:#c4d0dc;font-size:10px}.calendar-grid button:hover{background:#1b3651}.calendar-grid button.outside{color:#475b70}.calendar-grid button.today{box-shadow:inset 0 0 0 1px #46759d}.calendar-grid button.selected{background:#3279ae;color:#fff}.calendar-popover footer{display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}.calendar-popover footer button{color:#8cb9db;font-size:10px}@media print{.select-menu,.calendar-popover{display:none!important}}
+.custom-select,
+.date-picker {
+  position: relative;
+  width: 100%;
+}
+.select-trigger,
+.date-trigger {
+  width: 100%;
+  min-height: 35px;
+  justify-content: space-between;
+  border: 1px solid var(--line);
+  background: #081421;
+  color: var(--text);
+  padding: 8px 9px;
+  border-radius: 6px;
+  outline: 0;
+}
+.select-trigger:hover,
+.date-trigger:hover,
+.custom-select.is-open .select-trigger {
+  border-color: #4d85b1;
+  background: #0b1a2a;
+}
+.select-trigger svg {
+  color: #7f94aa;
+  transition: transform 0.15s;
+}
+.custom-select.is-open .select-trigger > svg {
+  transform: rotate(180deg);
+}
+.select-menu {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 5px);
+  left: 0;
+  right: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 5px;
+  border: 1px solid #355473;
+  border-radius: 8px;
+  background: #0d1b2c;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.46);
+}
+.select-option {
+  width: 100%;
+  justify-content: space-between;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 8px 9px;
+}
+.select-option:hover,
+.select-option[aria-selected="true"] {
+  background: #172d44;
+}
+.select-option b,
+.select-option small {
+  display: block;
+}
+.select-option b {
+  font-size: 11px;
+  font-weight: 550;
+}
+.select-option small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 9px;
+}
+.select-option > svg {
+  flex: 0 0 auto;
+  color: #73b7e9;
+}
+.date-trigger {
+  justify-content: flex-start;
+  color: #72869e;
+}
+.date-trigger.has-value {
+  color: var(--text);
+}
+.date-trigger > span {
+  flex: 1;
+  text-align: left;
+}
+.date-trigger > svg:first-child {
+  color: #73aede;
+}
+.date-clear {
+  color: #788da5;
+}
+.calendar-popover {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 5px);
+  right: 0;
+  width: 270px;
+  padding: 10px;
+  border: 1px solid #355473;
+  border-radius: 9px;
+  background: #0d1b2c;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.5);
+}
+.calendar-popover header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
+}
+.calendar-popover header b {
+  font-size: 11px;
+}
+.calendar-popover button {
+  border: 0;
+  background: transparent;
+  padding: 6px;
+}
+.calendar-weekdays,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.calendar-weekdays span {
+  text-align: center;
+  padding: 4px 0;
+  color: #6f849a;
+  font-size: 9px;
+}
+.calendar-grid button {
+  aspect-ratio: 1;
+  border-radius: 5px;
+  color: #c4d0dc;
+  font-size: 10px;
+}
+.calendar-grid button:hover {
+  background: #1b3651;
+}
+.calendar-grid button.outside {
+  color: #475b70;
+}
+.calendar-grid button.today {
+  box-shadow: inset 0 0 0 1px #46759d;
+}
+.calendar-grid button.selected {
+  background: #3279ae;
+  color: #fff;
+}
+.calendar-popover footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.calendar-popover footer button {
+  color: #8cb9db;
+  font-size: 10px;
+}
+@media print {
+  .select-menu,
+  .calendar-popover {
+    display: none !important;
+  }
+}

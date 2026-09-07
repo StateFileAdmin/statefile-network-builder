@@ -4,37 +4,32 @@
   "main": "src/worker.ts",
   "compatibility_date": "2026-09-07",
   "compatibility_flags": ["nodejs_compat"],
-
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": ["/api/*"],
   },
-
-  // Keep both false. Access cannot protect a workers.dev or preview URL, and
-  // the app has no login of its own — either one publishes an unauthenticated
-  // copy of your register. See README step 4.
   "workers_dev": false,
   "preview_urls": false,
-
-  "routes": [
-    { "pattern": "REPLACE-ME.example.com", "custom_domain": true }
-  ],
-
+  "routes": [{ "pattern": "network.example.com", "custom_domain": true }],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "network-builder",
-      "database_id": "REPLACE-ME-WITH-YOUR-D1-DATABASE-ID"
-    }
+      "database_id": "00000000-0000-0000-0000-000000000000",
+    },
   ],
-
-  // Public identifiers for your Access application, not secrets.
+  "ratelimits": [
+    {
+      "name": "LOGIN_RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 20, "period": 60 },
+    },
+  ],
   "vars": {
-    "ACCESS_TEAM_DOMAIN": "REPLACE-ME.cloudflareaccess.com",
-    "ACCESS_AUD": "REPLACE-ME-WITH-YOUR-ACCESS-AUD-TAG"
+    "RP_ID": "network.example.com",
+    "RP_ORIGIN": "https://network.example.com",
   },
-
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
 }
