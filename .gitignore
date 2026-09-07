@@ -4,6 +4,15 @@ dist/
 vite.config.js
 vite.config.d.ts
 .DS_Store
+
+# Secrets and local state — never commit
 .env
 .env.*
 !.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.wrangler/
+
+# Exported registers may contain real client network data
+*.network-register.json

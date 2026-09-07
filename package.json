@@ -1,1 +1,31 @@
-{"name":"network-design-register","private":true,"version":"1.0.0","type":"module","scripts":{"dev":"vite","build":"tsc -b && vite build","preview":"vite preview","typecheck":"tsc -b --pretty false"},"dependencies":{"@xyflow/react":"^12.8.5","lucide-react":"^0.468.0","react":"^18.3.1","react-dom":"^18.3.1"},"devDependencies":{"@types/react":"^18.3.12","@types/react-dom":"^18.3.1","@vitejs/plugin-react":"^4.3.4","typescript":"^5.7.2","vite":"^6.0.5"}}
+{
+  "name": "statefile-network-builder",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --pretty false && tsc -p tsconfig.worker.json --pretty false",
+    "deploy": "npm run build && wrangler deploy",
+    "db:init": "wrangler d1 execute network-builder --remote --file db/schema.sql"
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.8.5",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260907.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "wrangler": "^4.129.0"
+  },
+  "description": "Self-hosted network documentation register — interactive topology, asset and IP registers, and a management report. Runs on Cloudflare Workers + D1 behind Cloudflare Access.",
+  "license": "MIT"
+}
