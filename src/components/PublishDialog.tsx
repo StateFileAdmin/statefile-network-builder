@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Check, History, RotateCcw, UploadCloud, X } from "lucide-react";
+import { History, RotateCcw, X } from "lucide-react";
 import type { Site } from "../types";
 import { authenticatedFetch } from "../data/storage";
+import { ActionDialog, type ActionDialogRequest } from "./ActionDialog";
 import "./PublishDialog.css";
 
 interface Publication {
@@ -12,24 +13,23 @@ interface Publication {
   published_by: string;
 }
 
-export function PublishDialog({
+export function PublicationHistoryDialog({
   site,
-  version,
   canRestore,
   onClose,
   onRestored,
 }: {
   site: Site;
-  version: number;
   canRestore: boolean;
   onClose: () => void;
   onRestored: () => void;
 }) {
   const [items, setItems] = useState<Publication[]>([]),
-    [note, setNote] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [published, setPublished] = useState(false);
+    [actionDialog, setActionDialog] = useState<ActionDialogRequest | null>(
+      null,
+    );
   const load = async () => {
     const response = await authenticatedFetch(
       `/api/publications?siteId=${encodeURIComponent(site.id)}`,
@@ -49,41 +49,7 @@ export function PublishDialog({
       ),
     );
   }, [site.id]);
-  const publish = async () => {
-    setBusy(true);
-    setError("");
-    try {
-      const response = await authenticatedFetch("/api/publications", {
-        method: "POST",
-        body: JSON.stringify({
-          siteId: site.id,
-          version,
-          releaseNote: note.trim(),
-        }),
-      });
-      const data = (await response.json()) as { error?: string };
-      if (!response.ok)
-        throw new Error(
-          data.error === "conflict"
-            ? "A newer draft exists. Close this window and try again."
-            : data.error || "Could not publish.",
-        );
-      setPublished(true);
-      setNote("");
-      await load();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not publish.");
-    } finally {
-      setBusy(false);
-    }
-  };
   const restore = async (item: Publication) => {
-    if (
-      !window.confirm(
-        `Restore “${site.name}” to the version published on ${new Date(item.published_at).toLocaleString("en-AU")}? This creates a new draft and does not erase history.`,
-      )
-    )
-      return;
     setBusy(true);
     setError("");
     try {
@@ -111,45 +77,18 @@ export function PublishDialog({
       <section className="publish-dialog">
         <header>
           <div>
-            <span className="eyebrow">Release checkpoint</span>
-            <h2>Publish {site.name}</h2>
+            <span className="eyebrow">Release checkpoints</span>
+            <h2>Publication history</h2>
             <p>
-              Draft changes already autosave. Publishing marks this version as
-              an approved update.
+              Review approved versions of {site.name} or restore an earlier
+              publication.
             </p>
           </div>
           <button className="icon-button" onClick={onClose}>
             <X />
           </button>
         </header>
-        <div className="publish-form">
-          <label>
-            <span>
-              What changed? <small>Optional</small>
-            </span>
-            <textarea
-              rows={3}
-              maxLength={500}
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="Document the reason for this network update…"
-            />
-          </label>
-          <button
-            className="primary"
-            disabled={busy}
-            onClick={() => void publish()}
-          >
-            <UploadCloud size={16} />
-            {busy ? "Working…" : "Publish current draft"}
-          </button>
-          {published && (
-            <span className="publish-success">
-              <Check size={15} /> Version {version} published
-            </span>
-          )}
-          {error && <div className="account-error">{error}</div>}
-        </div>
+        {error && <div className="account-error">{error}</div>}
         <div className="publication-history">
           <h3>
             <History size={16} /> Publication history
@@ -169,7 +108,14 @@ export function PublishDialog({
                   <button
                     className="quiet"
                     disabled={busy}
-                    onClick={() => void restore(item)}
+                    onClick={() =>
+                      setActionDialog({
+                        title: `Restore version ${item.register_version}?`,
+                        message: `This replaces the current ${site.name} draft with the version published on ${new Date(item.published_at).toLocaleString("en-AU")}. Publication history remains available.`,
+                        confirmLabel: "Restore version",
+                        onConfirm: () => restore(item),
+                      })
+                    }
                   >
                     <RotateCcw size={14} /> Restore
                   </button>
@@ -181,6 +127,12 @@ export function PublishDialog({
           )}
         </div>
       </section>
+      {actionDialog && (
+        <ActionDialog
+          request={actionDialog}
+          onClose={() => setActionDialog(null)}
+        />
+      )}
     </div>
   );
 }

@@ -1233,3 +1233,130 @@ html[data-role="staff"] .relationship-card > button {
   color: #7cddb5;
   cursor: default;
 }
+
+:root {
+  color: #f4f5f7;
+  background: #050506;
+  --bg: #050506;
+  --panel: #0d0d0f;
+  --panel-2: #111113;
+  --panel-3: #151517;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.15);
+  --text: #f4f5f7;
+  --muted: #9a9ca3;
+  --blue: #3d75ed;
+  --amber: #fbbf24;
+  --green: #34d399;
+  --purple: #818cf8;
+  --red: #f87171;
+}
+body {
+  background: var(--bg);
+}
+button {
+  border-color: var(--line-strong);
+  background: var(--panel-3);
+}
+button:hover {
+  border-color: rgba(61, 117, 237, 0.65);
+  background: #19191c;
+}
+button.primary {
+  border-color: #4d82ef;
+  background: #3d75ed;
+}
+.app-header,
+.view-tabs {
+  background: #09090b;
+}
+.brand-mark,
+.node-icon,
+.palette-icon,
+.location-card-icon,
+.relationship-icon {
+  border-color: rgba(61, 117, 237, 0.35);
+  background: rgba(61, 117, 237, 0.14);
+  color: #7aa2f7;
+}
+.dashboard-button {
+  border-color: var(--line-strong);
+}
+.dashboard-button.active {
+  border-color: rgba(61, 117, 237, 0.55);
+  background: rgba(61, 117, 237, 0.14);
+}
+.view-tabs button:hover,
+.view-tabs button.active {
+  background: #151517;
+}
+.state-legend {
+  background: rgba(13, 13, 15, 0.94);
+}
+.network-node {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: linear-gradient(145deg, #151517, #0d0d0f);
+}
+.network-node:hover {
+  border-color: rgba(61, 117, 237, 0.8);
+}
+.network-node.state-future {
+  border-color: #626ac5;
+  background: linear-gradient(145deg, #171723, #0d0d12);
+}
+.node-footer {
+  border-color: var(--line);
+}
+.react-flow__handle {
+  background: #5b86ff !important;
+  border-color: #0d0d0f !important;
+}
+.react-flow__edge-textbg,
+.react-flow__controls,
+.react-flow__minimap,
+.react-flow__controls-button {
+  background: #0d0d0f !important;
+}
+.drawer,
+.device-palette {
+  border-color: var(--line-strong);
+  background: #0d0d0f;
+}
+.drawer-header {
+  background: rgba(13, 13, 15, 0.96);
+}
+.form-grid input,
+.form-grid select,
+.form-grid textarea,
+.editable-table input,
+.editable-table select,
+.palette-search {
+  background: #0a0a0b;
+}
+.content-panel {
+  background: var(--panel);
+}
+th {
+  background: #111113;
+}
+td {
+  border-color: var(--line);
+}
+.palette-card,
+.location-card {
+  background: #111113;
+}
+.palette-card:hover,
+.location-card:hover {
+  border-color: rgba(61, 117, 237, 0.55);
+  background: #19191c;
+}
+.toast {
+  border-color: rgba(61, 117, 237, 0.45);
+  background: #151517;
+}
+.sync-chip.sync-saved {
+  border-color: rgba(61, 117, 237, 0.3);
+  background: rgba(61, 117, 237, 0.12);
+  color: #8aaaf2;
+}

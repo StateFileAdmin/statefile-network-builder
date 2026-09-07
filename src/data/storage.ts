@@ -115,6 +115,7 @@ const localRequest = async (path: string, init?: RequestInit) => {
     return Response.json({
       id: item.id,
       publishedVersion: item.register_version,
+      publishedAt: item.published_at,
     });
   }
   return Response.json(

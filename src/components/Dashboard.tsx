@@ -237,7 +237,9 @@ function RelationshipCard({
   const source = sites.find((site) => site.id === link.sourceSiteId),
     target = sites.find((site) => site.id === link.targetSiteId);
   return (
-    <div className={`relationship-card state-${link.state.toLowerCase()}`}>
+    <div
+      className={`relationship-card status-${link.status.toLowerCase().replace(" ", "-")} state-${link.state.toLowerCase()}`}
+    >
       <span className="relationship-icon">
         {link.technology.toLowerCase().includes("vpn") ||
         link.technology.toLowerCase().includes("wireguard") ? (
@@ -252,6 +254,7 @@ function RelationshipCard({
           <span
             className={`relationship-status status-${link.status.toLowerCase().replace(" ", "-")}`}
           >
+            {link.state === "Future" ? "Future · " : ""}
             {link.status}
           </span>
         </div>
@@ -378,6 +381,7 @@ function RelationshipModal({
       "Needs Verification",
       "Planned",
       "Retired",
+      "Compromised",
     ],
     statusOptions = statuses.map((value) => ({ value, label: value })),
     stateOptions = [

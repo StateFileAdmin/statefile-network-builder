@@ -33,6 +33,10 @@
   background: #0d1c2d;
   font-size: 12px;
 }
+.header-site-select .select-trigger {
+  border-color: var(--line-strong);
+  background: #111113;
+}
 .header-site-select .select-trigger > span {
   overflow: hidden;
   text-overflow: ellipsis;

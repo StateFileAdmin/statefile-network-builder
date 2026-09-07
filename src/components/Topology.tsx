@@ -1,4 +1,10 @@
-import { useEffect } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type PointerEvent,
+} from "react";
 import {
   Background,
   BaseEdge,
@@ -8,6 +14,8 @@ import {
   MarkerType,
   MiniMap,
   Position,
+  SelectionMode,
+  type ReactFlowInstance,
   ReactFlow,
   getBezierPath,
   useNodesState,
@@ -24,6 +32,7 @@ import {
   Shield,
   Users,
   Wifi,
+  Plus,
 } from "lucide-react";
 import type {
   NetworkConnection,
@@ -45,13 +54,37 @@ const iconFor = (type: string) => {
   return CircleHelp;
 };
 
+type QuickAddData = NetworkDevice & {
+  onQuickAdd: (id: string, side: "before" | "after") => void;
+};
+
 function DeviceNode({ data }: NodeProps<TopologyNode>) {
   const Icon = iconFor(data.deviceType);
+  const quickAdd = (data as QuickAddData).onQuickAdd;
+  const pointerStart = useRef({ x: 0, y: 0 });
+  const clickHandle = (event: MouseEvent, side: "before" | "after") => {
+    event.stopPropagation();
+    const moved = Math.hypot(
+      event.clientX - pointerStart.current.x,
+      event.clientY - pointerStart.current.y,
+    );
+    if (moved <= 4) quickAdd(data.id, side);
+  };
+  const rememberPointer = (event: PointerEvent) => {
+    pointerStart.current = { x: event.clientX, y: event.clientY };
+  };
   return (
     <div
       className={`network-node status-${data.status.toLowerCase().replace(" ", "-")} state-${data.state.toLowerCase()}`}
     >
-      <Handle type="target" position={Position.Left} />
+      <Handle
+        type="target"
+        position={Position.Left}
+        aria-label={`Add a device before ${data.hostname}, or drag to connect`}
+        title="Click to add an attached device · drag to connect"
+        onPointerDown={rememberPointer}
+        onClick={(event) => clickHandle(event, "before")}
+      />
       <div className="node-top">
         <div className="node-heading">
           <span className="node-icon">
@@ -62,24 +95,27 @@ function DeviceNode({ data }: NodeProps<TopologyNode>) {
             <div className="node-type">{data.deviceType}</div>
           </div>
         </div>
-        <div className="node-indicators">
-          {data.state === "Future" && (
-            <span className="future-marker">Future</span>
-          )}
-          <span
-            className={`status-dot ${data.status.toLowerCase().replace(" ", "-")}`}
-          />
-        </div>
       </div>
       <div className="node-meta">
         {data.manufacturer} {data.model}
       </div>
       <div className="node-footer">
+        <span className="node-status">
+          {data.state === "Future" ? "Future · " : ""}
+          {data.status}
+        </span>
         <span>
           {data.managementIp || data.connectionType || "Details required"}
         </span>
       </div>
-      <Handle type="source" position={Position.Right} />
+      <Handle
+        type="source"
+        position={Position.Right}
+        aria-label={`Add a device after ${data.hostname}, or drag to connect`}
+        title="Click to add an attached device · drag to connect"
+        onPointerDown={rememberPointer}
+        onClick={(event) => clickHandle(event, "after")}
+      />
     </div>
   );
 }
@@ -129,25 +165,40 @@ interface Props {
   connections: NetworkConnection[];
   onDeviceClick: (id: string) => void;
   onConnectionClick: (id: string) => void;
-  onMove: (id: string, position: { x: number; y: number }) => void;
+  onMoveMany: (
+    positions: { id: string; position: { x: number; y: number } }[],
+  ) => void;
   onConnect: (connection: Connection) => void;
+  onQuickAdd: (id: string, side: "before" | "after") => void;
+  onAddAt: (position: { x: number; y: number }) => void;
 }
 export function Topology({
   devices,
   connections,
   onDeviceClick,
   onConnectionClick,
-  onMove,
+  onMoveMany,
   onConnect,
+  onQuickAdd,
+  onAddAt,
 }: Props) {
   const incomingNodes: TopologyNode[] = devices.map((d) => ({
     id: d.id,
     type: "networkDevice",
     position: d.position,
-    data: d,
+    data: { ...d, onQuickAdd } as NetworkDevice,
   }));
   const [nodes, setNodes, onNodesChange] =
     useNodesState<TopologyNode>(incomingNodes);
+  const [instance, setInstance] = useState<ReactFlowInstance<
+      TopologyNode,
+      TopologyEdge
+    > | null>(null),
+    [contextMenu, setContextMenu] = useState<{
+      left: number;
+      top: number;
+      position: { x: number; y: number };
+    } | null>(null);
   useEffect(() => {
     setNodes((current) =>
       incomingNodes.map((incoming) => {
@@ -158,6 +209,14 @@ export function Topology({
       }),
     );
   }, [devices, setNodes]);
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setContextMenu(null);
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [contextMenu]);
   const edges: TopologyEdge[] = connections.map((c) => ({
     id: c.id,
     source: c.source,
@@ -169,11 +228,13 @@ export function Topology({
     className: `edge-${c.state.toLowerCase()} edge-${c.status.toLowerCase().replace(" ", "-")}`,
     style: {
       stroke:
-        c.state === "Future"
-          ? "#8d83f6"
+        c.status === "Known"
+          ? "#34d399"
           : c.status === "Needs Verification"
-            ? "#d99b36"
-            : "#4a7fab",
+            ? "#fbbf24"
+            : c.status === "Compromised" || c.status === "Removed"
+              ? "#f87171"
+              : "#3d75ed",
     },
   }));
   return (
@@ -185,28 +246,77 @@ export function Topology({
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         fitView
-        fitViewOptions={{ padding: 0.18 }}
-        minZoom={0.3}
+        fitViewOptions={{ padding: 0.18, minZoom: 0.5 }}
+        minZoom={0.5}
         maxZoom={1.8}
         snapToGrid
         snapGrid={[24, 24]}
         nodesConnectable
+        selectionMode={SelectionMode.Partial}
+        selectionKeyCode="Shift"
+        panOnDrag
         onConnect={onConnect}
+        onInit={setInstance}
+        onPaneClick={() => setContextMenu(null)}
+        onPaneContextMenu={(event) => {
+          event.preventDefault();
+          if (!instance) return;
+          const bounds = (
+            event.currentTarget as HTMLElement
+          ).getBoundingClientRect();
+          setContextMenu({
+            left: Math.min(event.clientX - bounds.left, bounds.width - 180),
+            top: Math.min(event.clientY - bounds.top, bounds.height - 48),
+            position: instance.screenToFlowPosition({
+              x: event.clientX,
+              y: event.clientY,
+            }),
+          });
+        }}
         onNodeClick={(_, n) => onDeviceClick(n.id)}
         onEdgeClick={(_, e) => onConnectionClick(e.id)}
-        onNodeDragStop={(_, n) => onMove(n.id, n.position)}
+        onNodeDragStop={(_, node, draggedNodes) =>
+          onMoveMany(
+            (draggedNodes.length ? draggedNodes : [node]).map((item) => ({
+              id: item.id,
+              position: item.position,
+            })),
+          )
+        }
         colorMode="dark"
       >
-        <Background color="#24344c" gap={24} />
+        <Background color="#24271f" gap={24} />
         <MiniMap
           pannable
           zoomable
-          nodeColor={(n) =>
-            (n.data as NetworkDevice).state === "Future" ? "#685cc7" : "#28547d"
-          }
+          nodeColor={(n) => {
+            const status = (n.data as NetworkDevice).status;
+            if (status === "Known") return "#34d399";
+            if (status === "Needs Verification") return "#fbbf24";
+            if (status === "Compromised" || status === "Removed")
+              return "#f87171";
+            return "#3d75ed";
+          }}
         />
         <Controls showInteractive={false} />
       </ReactFlow>
+      {contextMenu && (
+        <div
+          className="canvas-context-menu"
+          role="menu"
+          style={{ left: contextMenu.left, top: contextMenu.top }}
+        >
+          <button
+            role="menuitem"
+            onClick={() => {
+              onAddAt(contextMenu.position);
+              setContextMenu(null);
+            }}
+          >
+            <Plus size={15} /> Add device here
+          </button>
+        </div>
+      )}
     </div>
   );
 }

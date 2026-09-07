@@ -8,7 +8,7 @@ Do not open a public issue containing exploit details or real network informatio
 
 Run a maintained Node.js release, keep dependencies current, use HTTPS, keep `workers_dev` and preview URLs disabled, and restrict Cloudflare account access. Review account assignments and security events regularly.
 
-Protect the one-time initial setup value as a secret and delete it after the first administrator has enrolled. Create a second administrator for recovery, then use one-hour single-use invitation links for other users.
+Keep initial setup disabled except during first-administrator enrolment, then disable it and redeploy immediately. Create a second administrator for recovery, then use one-hour single-use invitation links for other users.
 
 ## Data handling
 

@@ -38,28 +38,19 @@ The schema is additive and may be run again. Back up an existing deployment befo
 npm run deploy
 ```
 
-The setup screen remains locked until a one-time secret is configured. Generate a high-entropy value locally, then paste it into Wrangler's hidden prompt:
+Initial administrator enrolment is disabled by default. Temporarily set `vars.INITIAL_SETUP_ENABLED` to `"true"` in `wrangler.jsonc` and deploy again:
 
 ```bash
-openssl rand -hex 32
-npx wrangler secret put SETUP_TOKEN
+npm run deploy
 ```
 
-Do not place the value in `wrangler.jsonc`, a shell-history command, a screenshot or the repository.
-
-Open a private setup link using the same value after `#setup/`, for example:
-
-```text
-https://network.example.com/#setup/YOUR_GENERATED_VALUE
-```
-
-The fragment is read by the browser and is not sent in the HTTP request. Keep the link private, register the initial administrator passkey, then remove the bootstrap secret:
+Open the application at its normal URL and create the first administrator passkey. As soon as enrolment succeeds, return `INITIAL_SETUP_ENABLED` to `"false"` and deploy once more:
 
 ```bash
-npx wrangler secret delete SETUP_TOKEN
+npm run deploy
 ```
 
-Only someone holding the secret can start initial enrolment. The database also closes first-user setup permanently as soon as an administrator exists.
+Keep the hostname private until this is complete. The server permits initial enrolment only while the flag is enabled and no account exists; after the first administrator is created, further setup requests are rejected regardless of the flag.
 
 ## 5. Create recovery and staff access
 

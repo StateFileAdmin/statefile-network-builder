@@ -1,17 +1,22 @@
 import { useEffect, useState } from "react";
+import { startRegistration } from "@simplewebauthn/browser";
+import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/browser";
 import {
   AlertTriangle,
   Check,
   Clipboard,
+  Fingerprint,
   LogOut,
   Shield,
   UserPlus,
   Users,
+  Trash2,
   X,
 } from "lucide-react";
 import type { Site } from "../types";
 import { authenticatedFetch } from "../data/storage";
 import { CustomSelect } from "./FormControls";
+import { ActionDialog, type ActionDialogRequest } from "./ActionDialog";
 import "./AccountPanel.css";
 
 export interface CurrentUser {
@@ -31,6 +36,14 @@ interface UserRow {
   status: "active" | "suspended";
   created_at: string;
   site_ids: string[];
+  passkey_count: number;
+}
+interface PasskeyRow {
+  id: string;
+  device_type: string;
+  backed_up: number;
+  created_at: string;
+  last_used_at: string | null;
 }
 interface SecurityEvent {
   id: number;
@@ -112,6 +125,7 @@ export function AccountPanel({
             <X />
           </button>
         </header>
+        <PasskeyManager />
         {user.role === "admin" ? (
           <>
             <nav>
@@ -215,6 +229,8 @@ function UserEditor({
 }) {
   const [draft, setDraft] = useState(person),
     [saving, setSaving] = useState(false),
+    [resetUrl, setResetUrl] = useState(""),
+    [copied, setCopied] = useState(false),
     [error, setError] = useState("");
   const save = async () => {
     setSaving(true);
@@ -243,11 +259,33 @@ function UserEditor({
       setSaving(false);
     }
   };
+  const resetPasskeys = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      const result = await json(
+        await authenticatedFetch(
+          `/api/admin/users/${encodeURIComponent(person.id)}/passkey-reset`,
+          { method: "POST", body: "{}" },
+        ),
+      );
+      setResetUrl(result.resetUrl as string);
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not create reset link.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
   return (
     <div className="user-editor">
       <div className="user-identity">
         <b>{person.display_name}</b>
-        <small>{person.email}</small>
+        <small>
+          {person.email} · {person.passkey_count} passkey
+          {person.passkey_count === 1 ? "" : "s"}
+        </small>
       </div>
       <CustomSelect
         label="Role"
@@ -311,8 +349,161 @@ function UserEditor({
       <button className="primary" disabled={saving} onClick={() => void save()}>
         {saving ? "Saving…" : "Save"}
       </button>
+      <button
+        className="quiet"
+        disabled={saving}
+        onClick={() => void resetPasskeys()}
+      >
+        <Fingerprint size={14} /> Reset passkeys
+      </button>
+      {resetUrl && (
+        <div className="passkey-reset-result">
+          <p>
+            Send this one-hour, single-use link securely. Completing it replaces
+            every existing passkey and signs the account out everywhere.
+          </p>
+          <code>{resetUrl}</code>
+          <button
+            className={copied ? "copied" : ""}
+            onClick={() => {
+              void navigator.clipboard.writeText(resetUrl).then(() => {
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 2000);
+              });
+            }}
+          >
+            <Clipboard size={14} /> {copied ? "Copied" : "Copy reset link"}
+          </button>
+        </div>
+      )}
       {error && <small className="field-error">{error}</small>}
     </div>
+  );
+}
+
+function PasskeyManager() {
+  const [passkeys, setPasskeys] = useState<PasskeyRow[]>([]),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(""),
+    [actionDialog, setActionDialog] = useState<ActionDialogRequest | null>(
+      null,
+    );
+  const load = async () => {
+    try {
+      const result = await json(await authenticatedFetch("/api/auth/passkeys"));
+      setPasskeys(result.passkeys as PasskeyRow[]);
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not load passkeys.",
+      );
+    }
+  };
+  useEffect(() => {
+    void load();
+  }, []);
+  const add = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const generated = await json(
+          await authenticatedFetch("/api/auth/passkeys/options", {
+            method: "POST",
+            body: "{}",
+          }),
+        ),
+        response = await startRegistration({
+          optionsJSON:
+            generated.options as PublicKeyCredentialCreationOptionsJSON,
+        });
+      await json(
+        await authenticatedFetch("/api/auth/passkeys/verify", {
+          method: "POST",
+          body: JSON.stringify({
+            challengeId: generated.challengeId,
+            response,
+          }),
+        }),
+      );
+      await load();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not add passkey.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async (id: string) => {
+    setError("");
+    try {
+      await json(
+        await authenticatedFetch(
+          `/api/auth/passkeys/${encodeURIComponent(id)}`,
+          {
+            method: "DELETE",
+            body: "{}",
+          },
+        ),
+      );
+      await load();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not remove passkey.",
+      );
+    }
+  };
+  return (
+    <section className="passkey-manager">
+      <header>
+        <div>
+          <b>Your passkeys</b>
+          <p>Add a backup passkey before removing an existing one.</p>
+        </div>
+        <button disabled={busy} onClick={() => void add()}>
+          <Fingerprint size={15} /> {busy ? "Opening…" : "Add passkey"}
+        </button>
+      </header>
+      {error && <div className="account-error">{error}</div>}
+      <div className="passkey-list">
+        {passkeys.map((passkey, index) => (
+          <div key={passkey.id} className="passkey-row">
+            <Fingerprint size={16} />
+            <span>
+              <b>Passkey {index + 1}</b>
+              <small>
+                Added {new Date(passkey.created_at).toLocaleDateString("en-AU")}
+                {passkey.last_used_at
+                  ? ` · Used ${new Date(passkey.last_used_at).toLocaleDateString("en-AU")}`
+                  : " · Not used yet"}
+              </small>
+            </span>
+            {passkeys.length > 1 && (
+              <button
+                className="icon-button danger-text"
+                title="Remove passkey"
+                onClick={() =>
+                  setActionDialog({
+                    title: "Remove this passkey?",
+                    message:
+                      "This passkey will stop working immediately. Keep at least one separate backup passkey on the account.",
+                    confirmLabel: "Remove passkey",
+                    onConfirm: () => remove(passkey.id),
+                  })
+                }
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      {actionDialog && (
+        <ActionDialog
+          request={actionDialog}
+          onClose={() => setActionDialog(null)}
+        />
+      )}
+    </section>
   );
 }
 
@@ -329,7 +520,6 @@ function InviteModal({
     [scopeAll, setScopeAll] = useState(false),
     [siteIds, setSiteIds] = useState<string[]>([]),
     [inviteUrl, setInviteUrl] = useState(""),
-    [copied, setCopied] = useState(false),
     [error, setError] = useState("");
   const create = async () => {
     setError("");
@@ -369,15 +559,10 @@ function InviteModal({
             <p>Send this single-use link securely. It expires in one hour.</p>
             <code>{inviteUrl}</code>
             <button
-              className={`primary${copied ? " copied" : ""}`}
-              onClick={() => {
-                void navigator.clipboard.writeText(inviteUrl).then(() => {
-                  setCopied(true);
-                  window.setTimeout(() => setCopied(false), 2000);
-                });
-              }}
+              className="primary"
+              onClick={() => void navigator.clipboard.writeText(inviteUrl)}
             >
-              <Clipboard size={15} /> {copied ? "Copied" : "Copy invitation"}
+              <Clipboard size={15} /> Copy invitation
             </button>
           </div>
         ) : (

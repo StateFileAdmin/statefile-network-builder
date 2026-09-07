@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import {
   CalendarDays,
   Check,
@@ -14,6 +20,7 @@ export interface SelectOption {
   label: string;
   description?: string;
 }
+
 export function CustomSelect({
   value,
   options,
@@ -28,15 +35,47 @@ export function CustomSelect({
   className?: string;
 }) {
   const [open, setOpen] = useState(false),
-    root = useRef<HTMLDivElement>(null),
-    selected = options.find((o) => o.value === value);
+    [active, setActive] = useState(0);
+  const root = useRef<HTMLDivElement>(null),
+    optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const selected = options.find((option) => option.value === value),
+    selectedIndex = Math.max(
+      0,
+      options.findIndex((option) => option.value === value),
+    );
   useEffect(() => {
-    const close = (e: MouseEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false);
+    const close = (event: MouseEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, []);
+  const openAt = (index: number) => {
+    setActive(index);
+    setOpen(true);
+    window.setTimeout(() => optionRefs.current[index]?.focus(), 0);
+  };
+  const move = (event: KeyboardEvent, index: number) => {
+    if (event.key === "Escape") {
+      setOpen(false);
+      root.current
+        ?.querySelector<HTMLButtonElement>(".select-trigger")
+        ?.focus();
+      return;
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const next =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? options.length - 1
+          : event.key === "ArrowDown"
+            ? (index + 1) % options.length
+            : (index - 1 + options.length) % options.length;
+    setActive(next);
+    optionRefs.current[next]?.focus();
+  };
   return (
     <div
       className={`custom-select ${open ? "is-open" : ""} ${className}`}
@@ -48,9 +87,13 @@ export function CustomSelect({
         aria-label={label}
         aria-haspopup="listbox"
         aria-expanded={open}
-        onClick={() => setOpen(!open)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") setOpen(false);
+        onClick={() => (open ? setOpen(false) : openAt(selectedIndex))}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") setOpen(false);
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            openAt(selectedIndex);
+          }
         }}
       >
         <span>{selected?.label || "Select…"}</span>
@@ -58,13 +101,18 @@ export function CustomSelect({
       </button>
       {open && (
         <div className="select-menu" role="listbox" aria-label={label}>
-          {options.map((option) => (
+          {options.map((option, index) => (
             <button
+              ref={(element) => {
+                optionRefs.current[index] = element;
+              }}
+              tabIndex={index === active ? 0 : -1}
               type="button"
               role="option"
               aria-selected={option.value === value}
               className="select-option"
               key={option.value}
+              onKeyDown={(event) => move(event, index)}
               onClick={() => {
                 onChange(option.value);
                 setOpen(false);
@@ -86,9 +134,10 @@ export function CustomSelect({
 const iso = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const parse = (value: string) => {
-  const [y, m, d] = value.split("-").map(Number);
-  return y && m && d ? new Date(y, m - 1, d) : null;
+  const [year, month, day] = value.split("-").map(Number);
+  return year && month && day ? new Date(year, month - 1, day) : null;
 };
+
 export function DatePicker({
   value,
   onChange,
@@ -103,8 +152,8 @@ export function DatePicker({
     [month, setMonth] = useState(() => selected || new Date()),
     root = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const close = (e: MouseEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false);
+    const close = (event: MouseEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
@@ -113,10 +162,10 @@ export function DatePicker({
     const first = new Date(month.getFullYear(), month.getMonth(), 1),
       start = new Date(first);
     start.setDate(1 - first.getDay());
-    return Array.from({ length: 42 }, (_, i) => {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      return d;
+    return Array.from({ length: 42 }, (_, index) => {
+      const date = new Date(start);
+      date.setDate(start.getDate() + index);
+      return date;
     });
   }, [month]);
   const display = selected
@@ -144,8 +193,8 @@ export function DatePicker({
           <X
             size={13}
             className="date-clear"
-            onClick={(e) => {
-              e.stopPropagation();
+            onClick={(event) => {
+              event.stopPropagation();
               onChange("");
             }}
           />
@@ -180,25 +229,24 @@ export function DatePicker({
             </button>
           </header>
           <div className="calendar-weekdays">
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-              <span key={d}>{d[0]}</span>
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+              <span key={day}>{day[0]}</span>
             ))}
           </div>
           <div className="calendar-grid">
-            {days.map((d) => {
-              const dateValue = iso(d),
-                today = dateValue === iso(new Date());
+            {days.map((date) => {
+              const dateValue = iso(date);
               return (
                 <button
                   type="button"
                   key={dateValue}
-                  className={`${d.getMonth() !== month.getMonth() ? "outside" : ""} ${dateValue === value ? "selected" : ""} ${today ? "today" : ""}`}
+                  className={`${date.getMonth() !== month.getMonth() ? "outside" : ""} ${dateValue === value ? "selected" : ""} ${dateValue === iso(new Date()) ? "today" : ""}`}
                   onClick={() => {
                     onChange(dateValue);
                     setOpen(false);
                   }}
                 >
-                  {d.getDate()}
+                  {date.getDate()}
                 </button>
               );
             })}

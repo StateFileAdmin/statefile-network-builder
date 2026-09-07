@@ -3,7 +3,9 @@ export type RecordStatus =
   | "Known"
   | "Needs Verification"
   | "Planned"
-  | "Retired";
+  | "Retired"
+  | "Compromised"
+  | "Removed";
 export type InfrastructureState = "Current" | "Future";
 export interface NetworkDevice extends Record<string, unknown> {
   id: string;
@@ -23,6 +25,7 @@ export interface NetworkDevice extends Record<string, unknown> {
   status: RecordStatus;
   state: InfrastructureState;
   position: XYPosition;
+  removedAt?: string;
 }
 export interface NetworkConnection extends Record<string, unknown> {
   id: string;
@@ -32,6 +35,7 @@ export interface NetworkConnection extends Record<string, unknown> {
   connectionType: string;
   status: RecordStatus;
   state: InfrastructureState;
+  removedAt?: string;
 }
 export interface IpPlanEntry {
   id: string;

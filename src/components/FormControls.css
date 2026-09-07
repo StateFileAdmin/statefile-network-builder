@@ -162,3 +162,30 @@
     display: none !important;
   }
 }
+.select-trigger,
+.date-trigger {
+  background: #0a0a0b;
+}
+.select-trigger:hover,
+.date-trigger:hover,
+.custom-select.is-open .select-trigger {
+  border-color: rgba(61, 117, 237, 0.65);
+  background: #151517;
+}
+.select-menu,
+.calendar-popover {
+  border-color: var(--line-strong);
+  background: #0d0d0f;
+}
+.select-option:hover,
+.select-option[aria-selected="true"],
+.calendar-grid button:hover {
+  background: #19191c;
+}
+.select-option > svg,
+.date-trigger > svg:first-child {
+  color: #7aa2f7;
+}
+.calendar-grid button.selected {
+  background: #3d75ed;
+}

@@ -31,15 +31,15 @@ Continue with [Cloudflare deployment](docs/CLOUDFLARE_DEPLOYMENT.md).
 
 ## Features
 
-- Drag-and-drop topology with labelled relationships
+- Drag-and-drop topology with labelled relationships, multi-select movement, quick-attached nodes and a canvas context menu
 - Location dashboard and inter-site VPN/dependency mapping
 - Asset and IP/VLAN registers
 - Current and future-state modelling
-- Known, verification, planned and retired statuses
-- Autosaved drafts and explicit published checkpoints
+- Known, verification, planned, retired, compromised and removed states
+- Autosaved drafts, direct publishing and restorable publication history
 - Printable management reports
 - Portable JSON import and export
-- Optional passkey accounts with administrator and staff roles
+- Optional passkey-only accounts, eight-hour sessions, multiple passkeys and administrator-managed recovery
 - Selected-location or all-location staff access
 
 ## Security boundary

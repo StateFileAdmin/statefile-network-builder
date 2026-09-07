@@ -316,12 +316,128 @@
   background: #102b43;
   color: #d8ebfa;
 }
-.invite-result button.copied {
+.invite-result button:focus {
   border-color: #4fc58a !important;
   background: #176b48 !important;
   color: #effff7 !important;
   box-shadow: 0 0 0 3px rgba(79, 197, 138, 0.18);
 }
-.invite-result button.copied svg {
+.invite-result button:focus svg {
   stroke: #effff7;
+}
+.invite-result p {
+  font-size: 0;
+}
+.invite-result p::after {
+  content: "Send this single-use link securely. It expires in 1 hour.";
+  font-size: 10px;
+}
+.account-panel,
+.nested-modal > div {
+  border-color: var(--line-strong);
+  background: #0d0d0f;
+}
+.user-editor,
+.security-row {
+  background: #111113;
+}
+.invite-fields input[type="email"],
+.invite-fields input:not([type]),
+.invite-result code {
+  background: #0a0a0b;
+}
+.scope-all,
+.site-assignments label {
+  border-color: var(--line);
+  background: #111113;
+}
+.scope-all:has(input:checked),
+.site-assignments label:has(input:checked) {
+  border-color: rgba(61, 117, 237, 0.55);
+  background: rgba(61, 117, 237, 0.14);
+}
+.scope-all input:checked,
+.site-assignments input:checked {
+  border-color: #5b86ff;
+  background: #3d75ed;
+}
+.passkey-manager {
+  margin: 16px 22px 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #111113;
+}
+.passkey-manager > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.passkey-manager > header b {
+  font-size: 11px;
+}
+.passkey-manager > header p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 9px;
+}
+.passkey-list {
+  display: grid;
+}
+.passkey-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+}
+.passkey-row:first-child {
+  border-top: 0;
+}
+.passkey-row > svg {
+  color: #7aa2f7;
+}
+.passkey-row b,
+.passkey-row small {
+  display: block;
+}
+.passkey-row b {
+  font-size: 10px;
+}
+.passkey-row small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 8px;
+}
+.passkey-reset-result {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  border-radius: 7px;
+  background: rgba(251, 191, 36, 0.06);
+}
+.passkey-reset-result p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #d8c58f;
+  font-size: 9px;
+}
+.passkey-reset-result code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #a9bdf1;
+  font-size: 8px;
+}
+.passkey-reset-result button.copied {
+  border-color: rgba(52, 211, 153, 0.5);
+  background: rgba(52, 211, 153, 0.14);
+  color: #7be8bd;
 }

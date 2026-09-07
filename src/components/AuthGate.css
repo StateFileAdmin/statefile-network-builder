@@ -175,3 +175,36 @@
   background: transparent;
   color: #8297ad;
 }
+.auth-shell {
+  background: #050506;
+}
+.auth-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
+}
+.auth-shell::before {
+  background: radial-gradient(
+    circle,
+    rgba(61, 117, 237, 0.16),
+    transparent 68%
+  );
+}
+.auth-brand > span,
+.auth-icon {
+  border-color: rgba(61, 117, 237, 0.4);
+  background: rgba(61, 117, 237, 0.14);
+  color: #8aaaf2;
+}
+.auth-panel {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(13, 13, 15, 0.94);
+}
+.auth-panel input,
+.passkey-explainer {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: #0a0a0b;
+}
+.auth-panel input:focus {
+  border-color: #3d75ed;
+}

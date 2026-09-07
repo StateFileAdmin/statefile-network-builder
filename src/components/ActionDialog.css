@@ -1,0 +1,97 @@
+.action-dialog-backdrop {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(2, 2, 3, 0.76);
+  backdrop-filter: blur(10px);
+}
+
+.action-dialog {
+  width: min(430px, 100%);
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.64);
+}
+
+.action-dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 4px;
+}
+
+.action-dialog-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(244, 184, 96, 0.3);
+  border-radius: 9px;
+  background: rgba(244, 184, 96, 0.09);
+  color: var(--amber);
+}
+
+.action-dialog-info .action-dialog-icon {
+  border-color: rgba(109, 181, 255, 0.28);
+  background: rgba(109, 181, 255, 0.08);
+  color: var(--blue-soft);
+}
+
+.action-dialog-copy {
+  padding: 11px 22px 20px;
+}
+
+.action-dialog h2 {
+  margin: 0 0 8px;
+  font-size: 19px;
+  letter-spacing: -0.025em;
+}
+
+.action-dialog p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.action-dialog > footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding: 13px 18px;
+  border-top: 1px solid var(--line);
+  background: var(--panel-2);
+}
+
+.action-dialog > footer button {
+  min-width: 104px;
+}
+
+@media (max-width: 480px) {
+  .action-dialog-backdrop {
+    align-items: end;
+    padding: 10px;
+  }
+
+  .action-dialog {
+    border-radius: 14px 14px 9px 9px;
+  }
+
+  .action-dialog > footer {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .action-dialog-info > footer {
+    grid-template-columns: 1fr;
+  }
+
+  .action-dialog > footer button {
+    min-height: 44px;
+  }
+}

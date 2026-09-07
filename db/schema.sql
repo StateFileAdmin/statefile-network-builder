@@ -23,13 +23,8 @@ CREATE TABLE IF NOT EXISTS register_revision (
 CREATE INDEX IF NOT EXISTS idx_revision_register
   ON register_revision (register_id, version DESC);
 
-CREATE TABLE IF NOT EXISTS app_bootstrap (
-  id           INTEGER PRIMARY KEY CHECK (id = 1),
-  completed_at TEXT NOT NULL
-);
-
 -- Application accounts. Authentication uses passkeys only; no passwords are
--- stored. Initial administrator enrolment also requires the setup secret.
+-- stored. The first completed passkey registration becomes the first admin.
 CREATE TABLE IF NOT EXISTS app_user (
   id           TEXT PRIMARY KEY,
   email        TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -112,6 +107,34 @@ CREATE TRIGGER IF NOT EXISTS cap_user_invite_to_one_hour
 AFTER INSERT ON user_invite
 BEGIN
   UPDATE user_invite
+     SET expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', NEW.created_at, '+1 hour')
+   WHERE token_hash = NEW.token_hash;
+END;
+
+CREATE TABLE IF NOT EXISTS passkey_reset (
+  token_hash TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  created_by TEXT NOT NULL REFERENCES app_user(id),
+  expires_at TEXT NOT NULL,
+  used_at    TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_passkey_reset_user
+  ON passkey_reset(user_id, expires_at);
+
+CREATE TRIGGER IF NOT EXISTS revoke_previous_passkey_resets
+BEFORE INSERT ON passkey_reset
+BEGIN
+  UPDATE passkey_reset
+     SET used_at = NEW.created_at
+   WHERE user_id = NEW.user_id AND used_at IS NULL;
+END;
+
+CREATE TRIGGER IF NOT EXISTS cap_passkey_reset_to_one_hour
+AFTER INSERT ON passkey_reset
+BEGIN
+  UPDATE passkey_reset
      SET expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', NEW.created_at, '+1 hour')
    WHERE token_hash = NEW.token_hash;
 END;

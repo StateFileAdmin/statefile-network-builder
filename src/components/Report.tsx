@@ -4,10 +4,16 @@ import "./ReportTopology.css";
 const clip = (value: string, length = 28) =>
   value.length > length ? `${value.slice(0, length - 1)}…` : value;
 function ReportTopology({ site }: { site: Site }) {
-  const devices = site.devices.filter((d) => d.status !== "Retired"),
+  const devices = site.devices.filter(
+      (d) => d.status !== "Retired" && d.status !== "Removed",
+    ),
     ids = new Set(devices.map((d) => d.id)),
     connections = site.connections.filter(
-      (c) => ids.has(c.source) && ids.has(c.target) && c.status !== "Retired",
+      (c) =>
+        ids.has(c.source) &&
+        ids.has(c.target) &&
+        c.status !== "Retired" &&
+        c.status !== "Removed",
     );
   if (!devices.length)
     return (
@@ -101,11 +107,10 @@ function ReportTopology({ site }: { site: Site }) {
               <g
                 key={d.id}
                 transform={`translate(${p.x} ${p.y})`}
-                className={`${d.state === "Future" ? "report-device-future" : ""} ${d.status === "Needs Verification" ? "report-device-unverified" : ""}`}
+                className={`${d.state === "Future" ? "report-device-future" : ""} ${d.status === "Needs Verification" ? "report-device-unverified" : ""} ${d.status === "Compromised" ? "report-device-compromised" : ""}`}
               >
                 <rect width={nodeWidth} height={nodeHeight} rx="8" />
-                <circle cx="18" cy="18" r="5" />
-                <text className="device-kind" x="31" y="22">
+                <text className="device-kind" x="14" y="22">
                   {clip(d.deviceType.toUpperCase(), 30)}
                 </text>
                 <text className="device-name" x="14" y="47">
@@ -135,15 +140,19 @@ function ReportTopology({ site }: { site: Site }) {
       <div className="report-diagram-legend">
         <span>
           <i />
-          Current
+          Known
         </span>
         <span>
           <i className="future" />
-          Future / planned
+          Planned / retired
         </span>
         <span>
           <i className="unverified" />
           Needs verification
+        </span>
+        <span>
+          <i className="danger" />
+          Compromised
         </span>
       </div>
     </div>

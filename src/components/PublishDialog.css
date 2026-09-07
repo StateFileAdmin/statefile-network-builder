@@ -87,3 +87,19 @@
     max-height: calc(100vh - 16px);
   }
 }
+.publish-dialog {
+  border-color: var(--line-strong);
+  background: #0d0d0f;
+  color: var(--text);
+}
+.publish-dialog > header,
+.publish-form,
+.publication-history article {
+  border-color: var(--line);
+}
+.publish-dialog header p,
+.publication-history article span,
+.publication-history article p,
+.empty-history {
+  color: var(--muted);
+}

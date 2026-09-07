@@ -4,6 +4,7 @@ import {
   verifyAuthenticationResponse,
   verifyRegistrationResponse,
   type AuthenticationResponseJSON,
+  type AuthenticatorTransport,
   type Base64URLString,
   type RegistrationResponseJSON,
   type WebAuthnCredential,
@@ -15,7 +16,7 @@ export interface AuthEnv {
   LOGIN_RATE_LIMITER: RateLimit;
   RP_ID: string;
   RP_ORIGIN: string;
-  SETUP_TOKEN?: string;
+  INITIAL_SETUP_ENABLED?: string;
 }
 export interface AppUser {
   id: string;
@@ -25,6 +26,7 @@ export interface AppUser {
   scopeAll: boolean;
   siteIds: string[];
   csrfToken: string;
+  expiresAt: string;
 }
 interface UserRow {
   id: string;
@@ -64,6 +66,12 @@ interface CredentialRow {
   device_type: string;
   backed_up: number;
 }
+interface ResetRow {
+  token_hash: string;
+  user_id: string;
+  expires_at: string;
+  used_at: string | null;
+}
 
 const SESSION_COOKIE = "nr_session",
   SESSION_SECONDS = 8 * 60 * 60,
@@ -76,17 +84,6 @@ const hash = async (value: string) =>
       await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)),
     ),
   );
-const constantTimeEqual = (left: string, right: string) => {
-  const leftBytes = new TextEncoder().encode(left);
-  const rightBytes = new TextEncoder().encode(right);
-  let difference = leftBytes.length ^ rightBytes.length;
-  const length = Math.max(leftBytes.length, rightBytes.length);
-  for (let index = 0; index < length; index += 1)
-    difference |=
-      leftBytes[index % leftBytes.length] ^
-      rightBytes[index % rightBytes.length];
-  return difference === 0;
-};
 const cookie = (request: Request, name: string) =>
   request.headers
     .get("Cookie")
@@ -105,12 +102,18 @@ const authJson = (body: unknown, status = 200, headers?: HeadersInit) =>
     headers: {
       "Content-Type": "application/json",
       "Cache-Control": "no-store",
+      "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
       "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "Cross-Origin-Resource-Policy": "same-origin",
+      "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
       ...headers,
     },
   });
 const parseBody = async (request: Request) => {
   if (request.headers.get("Origin") !== new URL(request.url).origin)
+    throw new Error("origin");
+  if (request.headers.get("Sec-Fetch-Site") === "cross-site")
     throw new Error("origin");
   if (
     !request.headers
@@ -119,6 +122,9 @@ const parseBody = async (request: Request) => {
       .startsWith("application/json")
   )
     throw new Error("content-type");
+  const contentLength = Number(request.headers.get("Content-Length") ?? 0);
+  if (Number.isFinite(contentLength) && contentLength > 100_000)
+    throw new Error("size");
   const text = await request.text();
   if (new TextEncoder().encode(text).byteLength > 100_000)
     throw new Error("size");
@@ -156,10 +162,10 @@ export async function sessionUser(
   if (!token) return null;
   const tokenHash = await hash(token);
   const row = await env.DB.prepare(
-    `SELECT u.id,u.email,u.display_name,u.role,u.scope_all,u.status,s.csrf_token FROM app_session s JOIN app_user u ON u.id=s.user_id WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at>?`,
+    `SELECT u.id,u.email,u.display_name,u.role,u.scope_all,u.status,s.csrf_token,s.expires_at FROM app_session s JOIN app_user u ON u.id=s.user_id WHERE s.token_hash=? AND s.revoked_at IS NULL AND s.expires_at>?`,
   )
     .bind(tokenHash, nowIso())
-    .first<UserRow & { csrf_token: string }>();
+    .first<UserRow & { csrf_token: string; expires_at: string }>();
   if (!row || row.status !== "active") return null;
   const sites = await env.DB.prepare(
     "SELECT site_id FROM user_site WHERE user_id=?",
@@ -174,6 +180,7 @@ export async function sessionUser(
     scopeAll: row.role === "admin" || Boolean(row.scope_all),
     siteIds: sites.results.map((item) => item.site_id),
     csrfToken: row.csrf_token,
+    expiresAt: row.expires_at,
   };
 }
 export const requireCsrf = (request: Request, user: AppUser) =>
@@ -261,8 +268,12 @@ export async function handleAuth(
           "SELECT COUNT(*) AS count FROM app_user",
         ).first<{ count: number }>();
       return authJson({
-        setupRequired: Number(count?.count ?? 0) === 0,
+        setupRequired:
+          env.INITIAL_SETUP_ENABLED === "true" &&
+          Number(count?.count ?? 0) === 0,
+        standaloneSetup: true,
         authenticated: Boolean(user),
+        accessEmail: null,
         user: user && {
           id: user.id,
           email: user.email,
@@ -272,35 +283,262 @@ export async function handleAuth(
           siteIds: user.siteIds,
         },
         csrfToken: user?.csrfToken,
+        expiresAt: user?.expiresAt,
+      });
+    }
+    if (path === "/api/auth/passkeys" && request.method === "GET") {
+      const user = await sessionUser(request, env);
+      if (!user) return authJson({ error: "Sign-in required." }, 401);
+      const credentials = await env.DB.prepare(
+        "SELECT id,device_type,backed_up,created_at,last_used_at FROM passkey_credential WHERE user_id=? ORDER BY created_at",
+      )
+        .bind(user.id)
+        .all();
+      return authJson({ passkeys: credentials.results });
+    }
+    if (path === "/api/auth/passkeys/options" && request.method === "POST") {
+      const user = await sessionUser(request, env);
+      if (!user || !requireCsrf(request, user))
+        return authJson({ error: "Sign-in required." }, 401);
+      await parseBody(request);
+      const credentials = await env.DB.prepare(
+        "SELECT id,transports FROM passkey_credential WHERE user_id=?",
+      )
+        .bind(user.id)
+        .all<{ id: string; transports: string }>();
+      if (credentials.results.length >= 10)
+        return authJson(
+          { error: "Remove an old passkey before adding another." },
+          409,
+        );
+      const options = await generateRegistrationOptions({
+        rpName: "Network Builder",
+        rpID: env.RP_ID,
+        userID: new TextEncoder().encode(user.id) as Uint8Array<ArrayBuffer>,
+        userName: user.email,
+        userDisplayName: user.displayName,
+        attestationType: "none",
+        authenticatorSelection: {
+          residentKey: "required",
+          userVerification: "required",
+        },
+        excludeCredentials: credentials.results.map((credential) => ({
+          id: credential.id,
+          transports: JSON.parse(
+            credential.transports,
+          ) as AuthenticatorTransport[],
+        })),
+        timeout: 120000,
+      });
+      const challengeId = await storeChallenge(
+        env,
+        "add-passkey",
+        options.challenge,
+        user.id,
+      );
+      return authJson({ options, challengeId });
+    }
+    if (path === "/api/auth/passkeys/verify" && request.method === "POST") {
+      const user = await sessionUser(request, env);
+      if (!user || !requireCsrf(request, user))
+        return authJson({ error: "Sign-in required." }, 401);
+      const body = (await parseBody(request)) as {
+        challengeId?: unknown;
+        response?: RegistrationResponseJSON;
+      };
+      if (typeof body.challengeId !== "string" || !body.response)
+        return authJson({ error: "Invalid passkey response." }, 400);
+      const challenge = await takeChallenge(
+        env,
+        body.challengeId,
+        "add-passkey",
+      );
+      if (!challenge || challenge.user_id !== user.id || challenge.invite_hash)
+        return authJson({ error: "Passkey setup expired." }, 400);
+      const verification = await verifyRegistrationResponse({
+        response: body.response,
+        expectedChallenge: challenge.challenge,
+        expectedOrigin: env.RP_ORIGIN,
+        expectedRPID: env.RP_ID,
+        requireUserVerification: true,
+      });
+      if (!verification.verified)
+        return authJson({ error: "Passkey verification failed." }, 400);
+      const credential = verification.registrationInfo.credential;
+      await env.DB.prepare(
+        "INSERT INTO passkey_credential (id,user_id,public_key,counter,transports,device_type,backed_up,created_at) VALUES (?,?,?,?,?,?,?,?)",
+      )
+        .bind(
+          credential.id,
+          user.id,
+          isoBase64URL.fromBuffer(credential.publicKey),
+          credential.counter,
+          JSON.stringify(credential.transports ?? []),
+          verification.registrationInfo.credentialDeviceType,
+          verification.registrationInfo.credentialBackedUp ? 1 : 0,
+          nowIso(),
+        )
+        .run();
+      await securityEvent(env, request, "passkey_added", "info", user.id);
+      return authJson({ verified: true });
+    }
+    const passkeyDelete = path.match(/^\/api\/auth\/passkeys\/([^/]+)$/);
+    if (passkeyDelete && request.method === "DELETE") {
+      const user = await sessionUser(request, env);
+      if (!user || !requireCsrf(request, user))
+        return authJson({ error: "Sign-in required." }, 401);
+      const result = await env.DB.prepare(
+        "DELETE FROM passkey_credential WHERE id=? AND user_id=? AND EXISTS (SELECT 1 FROM passkey_credential other WHERE other.user_id=? AND other.id<>?)",
+      )
+        .bind(
+          decodeURIComponent(passkeyDelete[1]),
+          user.id,
+          user.id,
+          decodeURIComponent(passkeyDelete[1]),
+        )
+        .run();
+      if (result.meta.changes !== 1)
+        return authJson(
+          { error: "Passkey not found, or it is your final passkey." },
+          409,
+        );
+      await securityEvent(env, request, "passkey_removed", "warning", user.id);
+      return authJson({ ok: true });
+    }
+    if (path === "/api/auth/reset/options" && request.method === "POST") {
+      const body = (await parseBody(request)) as { token?: unknown };
+      if (typeof body.token !== "string")
+        return authJson(
+          { error: "This reset link is invalid or expired." },
+          400,
+        );
+      const tokenHash = await hash(body.token);
+      const reset = await env.DB.prepare(
+        "SELECT * FROM passkey_reset WHERE token_hash=? AND used_at IS NULL AND expires_at>?",
+      )
+        .bind(tokenHash, nowIso())
+        .first<ResetRow>();
+      if (!reset)
+        return authJson(
+          { error: "This reset link is invalid or expired." },
+          400,
+        );
+      const target = await env.DB.prepare(
+        "SELECT * FROM app_user WHERE id=? AND status='active'",
+      )
+        .bind(reset.user_id)
+        .first<UserRow>();
+      if (!target) return authJson({ error: "Account unavailable." }, 400);
+      const options = await generateRegistrationOptions({
+        rpName: "Network Builder",
+        rpID: env.RP_ID,
+        userID: new TextEncoder().encode(target.id) as Uint8Array<ArrayBuffer>,
+        userName: target.email,
+        userDisplayName: target.display_name,
+        attestationType: "none",
+        authenticatorSelection: {
+          residentKey: "required",
+          userVerification: "required",
+        },
+        timeout: 120000,
+      });
+      const challengeId = await storeChallenge(
+        env,
+        "add-passkey",
+        options.challenge,
+        target.id,
+        target.email,
+        target.display_name,
+        tokenHash,
+      );
+      return authJson({
+        options,
+        challengeId,
+        displayName: target.display_name,
+      });
+    }
+    if (path === "/api/auth/reset/verify" && request.method === "POST") {
+      const body = (await parseBody(request)) as {
+        challengeId?: unknown;
+        response?: RegistrationResponseJSON;
+      };
+      if (typeof body.challengeId !== "string" || !body.response)
+        return authJson({ error: "Passkey reset failed." }, 400);
+      const challenge = await takeChallenge(
+        env,
+        body.challengeId,
+        "add-passkey",
+      );
+      if (!challenge?.user_id || !challenge.invite_hash)
+        return authJson({ error: "Passkey reset expired." }, 400);
+      const reset = await env.DB.prepare(
+        "SELECT * FROM passkey_reset WHERE token_hash=? AND user_id=? AND used_at IS NULL AND expires_at>?",
+      )
+        .bind(challenge.invite_hash, challenge.user_id, nowIso())
+        .first<ResetRow>();
+      if (!reset) return authJson({ error: "Passkey reset expired." }, 400);
+      const verification = await verifyRegistrationResponse({
+        response: body.response,
+        expectedChallenge: challenge.challenge,
+        expectedOrigin: env.RP_ORIGIN,
+        expectedRPID: env.RP_ID,
+        requireUserVerification: true,
+      });
+      if (!verification.verified)
+        return authJson({ error: "Passkey verification failed." }, 400);
+      const claimed = await env.DB.prepare(
+        "UPDATE passkey_reset SET used_at=? WHERE token_hash=? AND used_at IS NULL",
+      )
+        .bind(nowIso(), reset.token_hash)
+        .run();
+      if (claimed.meta.changes !== 1)
+        return authJson({ error: "Passkey reset already used." }, 409);
+      const credential = verification.registrationInfo.credential,
+        created = nowIso();
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM passkey_credential WHERE user_id=?").bind(
+          reset.user_id,
+        ),
+        env.DB.prepare(
+          "INSERT INTO passkey_credential (id,user_id,public_key,counter,transports,device_type,backed_up,created_at) VALUES (?,?,?,?,?,?,?,?)",
+        ).bind(
+          credential.id,
+          reset.user_id,
+          isoBase64URL.fromBuffer(credential.publicKey),
+          credential.counter,
+          JSON.stringify(credential.transports ?? []),
+          verification.registrationInfo.credentialDeviceType,
+          verification.registrationInfo.credentialBackedUp ? 1 : 0,
+          created,
+        ),
+        env.DB.prepare(
+          "UPDATE app_session SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL",
+        ).bind(created, reset.user_id),
+      ]);
+      const session = await createSession(env, reset.user_id);
+      await securityEvent(
+        env,
+        request,
+        "passkeys_reset",
+        "critical",
+        reset.user_id,
+      );
+      return authJson({ verified: true, csrfToken: session.csrfToken }, 200, {
+        "Set-Cookie": secureCookie(session.token),
       });
     }
     if (path === "/api/auth/setup/options" && request.method === "POST") {
+      if (env.INITIAL_SETUP_ENABLED !== "true")
+        return authJson({ error: "Initial setup is unavailable." }, 403);
       const count = await env.DB.prepare(
           "SELECT COUNT(*) AS count FROM app_user",
         ).first<{ count: number }>(),
         body = (await parseBody(request)) as {
           displayName?: unknown;
           email?: unknown;
-          setupCode?: unknown;
         };
       if (Number(count?.count ?? 0) !== 0)
         return authJson({ error: "Initial setup is unavailable." }, 403);
-      if (!env.SETUP_TOKEN)
-        return authJson(
-          { error: "Initial setup is not configured by the operator." },
-          503,
-        );
-      const suppliedCode =
-        typeof body.setupCode === "string" ? body.setupCode : "";
-      if (
-        !constantTimeEqual(
-          await hash(suppliedCode),
-          await hash(env.SETUP_TOKEN),
-        )
-      ) {
-        await securityEvent(env, request, "invalid_setup_token", "critical");
-        return authJson({ error: "The setup code is not valid." }, 403);
-      }
       const identifier =
         typeof body.email === "string" ? body.email.trim() : "";
       if (
@@ -335,6 +573,8 @@ export async function handleAuth(
       return authJson({ options, challengeId });
     }
     if (path === "/api/auth/setup/verify" && request.method === "POST") {
+      if (env.INITIAL_SETUP_ENABLED !== "true")
+        return authJson({ error: "Initial setup is unavailable." }, 403);
       const body = (await parseBody(request)) as {
         challengeId?: unknown;
         response?: unknown;
@@ -366,9 +606,6 @@ export async function handleAuth(
       const created = nowIso(),
         credential = verification.registrationInfo.credential;
       await env.DB.batch([
-        env.DB.prepare(
-          "INSERT INTO app_bootstrap (id,completed_at) VALUES (1,?)",
-        ).bind(created),
         env.DB.prepare(
           "INSERT INTO app_user (id,email,display_name,role,scope_all,status,created_at,created_by) VALUES (?,?,?,'admin',1,'active',?,?)",
         ).bind(
@@ -633,7 +870,12 @@ export async function handleAuth(
       path === "/api/auth/password" ||
       path === "/api/auth/admin-login"
     ) {
-      await securityEvent(env, request, "honeypot", "critical");
+      const canRecord = (
+        await env.LOGIN_RATE_LIMITER.limit({
+          key: `honeypot:${request.headers.get("CF-Connecting-IP") ?? "unknown"}`,
+        })
+      ).success;
+      if (canRecord) await securityEvent(env, request, "honeypot", "critical");
       return authJson({ error: "Not found." }, 404);
     }
     return authJson({ error: "Not found." }, 404);

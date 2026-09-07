@@ -320,3 +320,44 @@
     grid-template-columns: 1fr;
   }
 }
+.dashboard {
+  background: var(--bg);
+}
+.dashboard-summary,
+.dashboard-section {
+  background: #0d0d0f;
+}
+.location-card,
+.relationship-card {
+  border-color: var(--line);
+  background: #111113;
+}
+.location-card:hover {
+  border-color: rgba(61, 117, 237, 0.7);
+  background: #151517;
+}
+.relationship-card {
+  border-left-color: #34d399;
+}
+.relationship-card.status-needs-verification {
+  border-left-color: #fbbf24;
+}
+.relationship-card.status-planned,
+.relationship-card.status-retired,
+.relationship-card.state-future {
+  border-color: var(--line);
+  border-left-color: #3d75ed;
+  background: #111113;
+}
+.relationship-card.status-compromised,
+.relationship-card.status-removed {
+  border-left-color: #f87171;
+}
+.dashboard-modal {
+  border-color: var(--line-strong);
+  background: #0d0d0f;
+}
+.dashboard-modal input,
+.dashboard-modal textarea {
+  background: #0a0a0b;
+}

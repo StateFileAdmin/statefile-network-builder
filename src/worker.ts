@@ -3,6 +3,7 @@ import {
   isNetworkRegister,
   MAX_REGISTER_BYTES,
   registerByteLength,
+  validSite,
 } from "./data/validation";
 import type { NetworkRegister, Site } from "./types";
 import {
@@ -20,12 +21,16 @@ export interface Env extends AuthEnv {
 
 const REGISTER_ID = "default";
 const MAX_REQUEST_BYTES = MAX_REGISTER_BYTES + 10_000;
+const MAX_PUBLICATION_BYTES = 2_000;
+
 interface RegisterRow {
   document: string;
   version: number;
   updated_at: string;
   updated_by: string | null;
 }
+
+// --- Register --------------------------------------------------------------
 
 const SELECT_REGISTER =
   "SELECT document, version, updated_at, updated_by FROM register WHERE id = ?";
@@ -39,8 +44,35 @@ const json = (body: unknown, status = 200) =>
       "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",
+      "Cross-Origin-Resource-Policy": "same-origin",
+      "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
     },
   });
+
+async function readJson(request: Request, maxBytes: number): Promise<unknown> {
+  if (request.headers.get("Origin") !== new URL(request.url).origin)
+    throw new Error("origin");
+  if (request.headers.get("Sec-Fetch-Site") === "cross-site")
+    throw new Error("origin");
+  if (
+    !request.headers
+      .get("Content-Type")
+      ?.toLowerCase()
+      .startsWith("application/json")
+  )
+    throw new Error("content-type");
+  const contentLength = Number(request.headers.get("Content-Length") ?? 0);
+  if (Number.isFinite(contentLength) && contentLength > maxBytes)
+    throw new Error("size");
+  const raw = await request.text();
+  if (new TextEncoder().encode(raw).byteLength > maxBytes)
+    throw new Error("size");
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    throw new Error("json");
+  }
+}
 
 const toLoaded = (row: RegisterRow) => ({
   register: JSON.parse(row.document) as NetworkRegister,
@@ -304,11 +336,28 @@ export default {
       if (url.pathname === "/api/publications" && request.method === "POST") {
         if (!requireCsrf(request, user))
           return json({ error: "Cross-site writes are not allowed." }, 403);
-        const body = await request.json<{
+        let body: {
           siteId?: string;
           version?: number;
           releaseNote?: string;
-        }>();
+        };
+        try {
+          body = (await readJson(
+            request,
+            MAX_PUBLICATION_BYTES,
+          )) as typeof body;
+        } catch (error) {
+          if (error instanceof Error && error.message === "size")
+            return json({ error: "Publication payload is too large." }, 413);
+          if (error instanceof Error && error.message === "content-type")
+            return json(
+              { error: "Content-Type must be application/json." },
+              415,
+            );
+          if (error instanceof Error && error.message === "origin")
+            return json({ error: "Cross-site writes are not allowed." }, 403);
+          return json({ error: "Invalid JSON payload." }, 400);
+        }
         if (
           !body.siteId ||
           !canAccessSite(user, body.siteId) ||
@@ -325,22 +374,24 @@ export default {
         const register = JSON.parse(current.document) as NetworkRegister,
           site = register.sites.find((item) => item.id === body.siteId);
         if (!site) return json({ error: "Location not found." }, 404);
-        const result = await env.DB.prepare(
-          "INSERT INTO register_publication (register_id,site_id,document,register_version,release_note,published_at,published_by) VALUES (?,?,?,?,?,?,?)",
-        )
-          .bind(
-            REGISTER_ID,
-            site.id,
-            JSON.stringify(site),
-            current.version,
-            body.releaseNote,
-            new Date().toISOString(),
-            user.email,
+        const publishedAt = new Date().toISOString(),
+          result = await env.DB.prepare(
+            "INSERT INTO register_publication (register_id,site_id,document,register_version,release_note,published_at,published_by) VALUES (?,?,?,?,?,?,?)",
           )
-          .run();
+            .bind(
+              REGISTER_ID,
+              site.id,
+              JSON.stringify(site),
+              current.version,
+              body.releaseNote,
+              publishedAt,
+              user.email,
+            )
+            .run();
         return json({
           id: result.meta.last_row_id,
           publishedVersion: current.version,
+          publishedAt,
         });
       }
 
@@ -369,6 +420,8 @@ export default {
           return json({ error: "Register is not initialised." }, 409);
         const register = JSON.parse(current.document) as NetworkRegister,
           restored = JSON.parse(publication.document) as Site;
+        if (!validSite(restored) || restored.id !== publication.site_id)
+          return json({ error: "Published version is invalid." }, 409);
         if (!register.sites.some((site) => site.id === publication.site_id))
           return json({ error: "The location no longer exists." }, 409);
         const next = {

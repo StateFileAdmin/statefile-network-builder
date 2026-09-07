@@ -30,6 +30,7 @@
   "vars": {
     "RP_ID": "network.example.com",
     "RP_ORIGIN": "https://network.example.com",
+    "INITIAL_SETUP_ENABLED": "false",
   },
   "observability": { "enabled": true },
 }

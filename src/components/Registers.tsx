@@ -1,9 +1,13 @@
 import { AlertTriangle, Pencil, Plus, Trash2 } from "lucide-react";
 import type { IpPlanEntry, NetworkDevice, RecordStatus } from "../types";
 import { CustomSelect } from "./FormControls";
-const statusOptions = ["Known", "Needs Verification", "Planned", "Retired"].map(
-  (value) => ({ value, label: value }),
-);
+const statusOptions = [
+  "Known",
+  "Needs Verification",
+  "Planned",
+  "Retired",
+  "Compromised",
+].map((value) => ({ value, label: value }));
 export function StatusBadge({ status }: { status: RecordStatus }) {
   return (
     <span className={`badge badge-${status.toLowerCase().replace(" ", "-")}`}>

@@ -7,6 +7,7 @@ const statuses: RecordStatus[] = [
   "Needs Verification",
   "Planned",
   "Retired",
+  "Compromised",
 ];
 const statusOptions = statuses.map((value) => ({ value, label: value }));
 const stateOptions = [

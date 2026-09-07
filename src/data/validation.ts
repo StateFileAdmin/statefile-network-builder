@@ -20,6 +20,8 @@ const statuses = new Set<RecordStatus>([
   "Needs Verification",
   "Planned",
   "Retired",
+  "Compromised",
+  "Removed",
 ]);
 const states = new Set<InfrastructureState>(["Current", "Future"]);
 const object = (value: unknown): value is Record<string, unknown> =>
@@ -54,6 +56,7 @@ function validDevice(value: unknown): value is NetworkDevice {
     text(value.switchPort) &&
     text(value.notes, 10000) &&
     text(value.lastVerified, 50) &&
+    (value.removedAt === undefined || text(value.removedAt, 100)) &&
     status(value.status) &&
     state(value.state) &&
     object(value.position) &&
@@ -73,6 +76,7 @@ function validConnection(value: unknown): value is NetworkConnection {
     requiredText(value.target, 200) &&
     text(value.label) &&
     text(value.connectionType) &&
+    (value.removedAt === undefined || text(value.removedAt, 100)) &&
     status(value.status) &&
     state(value.state)
   );
@@ -93,7 +97,7 @@ function validIpEntry(value: unknown): value is IpPlanEntry {
     text(value.notes, 10000)
   );
 }
-function validSite(value: unknown): value is Site {
+export function validSite(value: unknown): value is Site {
   if (
     !object(value) ||
     !requiredText(value.id, 200) ||

@@ -8,7 +8,11 @@ const json = (body: unknown, status = 200) =>
     headers: {
       "Content-Type": "application/json",
       "Cache-Control": "no-store",
+      "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
       "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "Cross-Origin-Resource-Policy": "same-origin",
+      "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
     },
   });
 const hash = async (value: string) =>
@@ -21,6 +25,18 @@ const token = () =>
   isoBase64URL.fromBuffer(crypto.getRandomValues(new Uint8Array(32)));
 const body = async (request: Request, user: AppUser) => {
   if (!requireCsrf(request, user)) throw new Error("csrf");
+  if (request.headers.get("Sec-Fetch-Site") === "cross-site")
+    throw new Error("origin");
+  if (
+    !request.headers
+      .get("Content-Type")
+      ?.toLowerCase()
+      .startsWith("application/json")
+  )
+    throw new Error("content-type");
+  const contentLength = Number(request.headers.get("Content-Length") ?? 0);
+  if (Number.isFinite(contentLength) && contentLength > 50_000)
+    throw new Error("size");
   const raw = await request.text();
   if (new TextEncoder().encode(raw).byteLength > 50_000)
     throw new Error("size");
@@ -41,7 +57,7 @@ export async function handleAdmin(
   try {
     if (url.pathname === "/api/admin/users" && request.method === "GET") {
       const users = await env.DB.prepare(
-          "SELECT id,email,display_name,role,scope_all,status,created_at FROM app_user ORDER BY display_name",
+          "SELECT u.id,u.email,u.display_name,u.role,u.scope_all,u.status,u.created_at,COUNT(p.id) AS passkey_count FROM app_user u LEFT JOIN passkey_credential p ON p.user_id=u.id GROUP BY u.id ORDER BY u.display_name",
         ).all(),
         sites = await env.DB.prepare(
           "SELECT user_id,site_id FROM user_site",
@@ -53,6 +69,54 @@ export async function handleAdmin(
             .filter((site) => site.user_id === (item as { id: string }).id)
             .map((site) => site.site_id),
         })),
+      });
+    }
+    const resetMatch = url.pathname.match(
+      /^\/api\/admin\/users\/([^/]+)\/passkey-reset$/,
+    );
+    if (resetMatch && request.method === "POST") {
+      await body(request, user);
+      const targetId = decodeURIComponent(resetMatch[1]);
+      const target = await env.DB.prepare(
+        "SELECT id,status FROM app_user WHERE id=?",
+      )
+        .bind(targetId)
+        .first<{ id: string; status: string }>();
+      if (!target) return json({ error: "Account not found." }, 404);
+      if (target.status !== "active")
+        return json(
+          { error: "Activate the account before resetting its passkeys." },
+          409,
+        );
+      const rawToken = token(),
+        created = new Date(),
+        expires = new Date(created.getTime() + 60 * 60 * 1000);
+      await env.DB.prepare(
+        "INSERT INTO passkey_reset (token_hash,user_id,created_at,created_by,expires_at) VALUES (?,?,?,?,?)",
+      )
+        .bind(
+          await hash(rawToken),
+          targetId,
+          created.toISOString(),
+          user.id,
+          expires.toISOString(),
+        )
+        .run();
+      await env.DB.prepare(
+        "INSERT INTO security_event (event_type,severity,actor_id,route,detail,cf_ray,country,created_at) VALUES ('passkey_reset_issued','critical',?,?,?,?,?,?)",
+      )
+        .bind(
+          user.id,
+          url.pathname,
+          `target:${targetId}`,
+          request.headers.get("CF-Ray"),
+          request.headers.get("CF-IPCountry"),
+          created.toISOString(),
+        )
+        .run();
+      return json({
+        resetUrl: `${url.origin}/#reset/${rawToken}`,
+        expiresAt: expires.toISOString(),
       });
     }
     if (url.pathname === "/api/admin/invites" && request.method === "POST") {

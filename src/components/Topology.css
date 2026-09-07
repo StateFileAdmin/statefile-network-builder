@@ -26,3 +26,35 @@
   background: rgba(22, 20, 45, 0.96);
   color: #c8c0fb;
 }
+
+.canvas-context-menu {
+  position: absolute;
+  z-index: 12;
+  min-width: 170px;
+  padding: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  background: #111113;
+  box-shadow: 0 14px 35px rgba(0, 0, 0, 0.46);
+}
+
+.canvas-context-menu button {
+  width: 100%;
+  justify-content: flex-start;
+  border: 0;
+  background: transparent;
+}
+
+.canvas-context-menu button:hover,
+.canvas-context-menu button:focus-visible {
+  background: #19191c;
+}
+.edge-label {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(13, 13, 15, 0.96);
+  color: #f4f5f7;
+}
+.edge-label-future {
+  border-color: #626ac5;
+  background: rgba(21, 21, 31, 0.96);
+}

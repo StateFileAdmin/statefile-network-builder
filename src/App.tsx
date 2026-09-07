@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Boxes,
   CircleDot,
+  ChevronDown,
   Download,
   FileJson,
   LayoutDashboard,
@@ -11,7 +12,7 @@ import {
   Network,
   Plus,
   Printer,
-  Settings,
+  UserRound,
   Upload,
   UploadCloud,
 } from "lucide-react";
@@ -23,8 +24,13 @@ import { DevicePalette, type DeviceTemplate } from "./components/DevicePalette";
 import { Dashboard } from "./components/Dashboard";
 import { CustomSelect } from "./components/FormControls";
 import { AccountPanel, type CurrentUser } from "./components/AccountPanel";
-import { PublishDialog } from "./components/PublishDialog";
+import { PublicationHistoryDialog } from "./components/PublishDialog";
+import {
+  ActionDialog,
+  type ActionDialogRequest,
+} from "./components/ActionDialog";
 import "./components/SiteSelect.css";
+import "./components/AppTheme.css";
 import {
   ConflictError,
   SessionExpiredError,
@@ -102,8 +108,13 @@ export function App() {
     [sync, setSync] = useState<SyncState>("idle"),
     [user, setUser] = useState<CurrentUser | null>(null),
     [accountOpen, setAccountOpen] = useState(false),
-    [publishOpen, setPublishOpen] = useState(false),
-    [publishedVersion, setPublishedVersion] = useState<number | null>(null);
+    [historyOpen, setHistoryOpen] = useState(false),
+    [publishing, setPublishing] = useState(false),
+    [publishedVersion, setPublishedVersion] = useState<number | null>(null),
+    [publishedAt, setPublishedAt] = useState<string | null>(null),
+    [actionDialog, setActionDialog] = useState<ActionDialogRequest | null>(
+      null,
+    );
   // Version last read from the server; sent back on save so a stale write is rejected.
   const versionRef = useRef(0);
   // The register object the server holds, compared by reference so the save
@@ -133,9 +144,13 @@ export function App() {
         syncedRef.current = error.latest.register;
         setRegister(error.latest.register);
         setSync("idle");
-        window.alert(
-          `${error.message} The register has been refreshed with their version — please re-apply your change.`,
-        );
+        setActionDialog({
+          title: "A newer version was saved",
+          message: `${error.message} The register has been refreshed with their version. Re-apply your change to the current draft.`,
+          confirmLabel: "Continue",
+          tone: "info",
+          onConfirm: () => {},
+        });
         return;
       }
       setSync("error");
@@ -193,12 +208,13 @@ export function App() {
       .then(async (response) => {
         if (!response.ok) return;
         const result = (await response.json()) as {
-          publications?: { register_version: number }[];
+          publications?: { register_version: number; published_at: string }[];
         };
         setPublishedVersion(result.publications?.[0]?.register_version ?? null);
+        setPublishedAt(result.publications?.[0]?.published_at ?? null);
       })
       .catch(() => {});
-  }, [siteId, page, sync, publishOpen, register]);
+  }, [siteId, page, sync, historyOpen, register]);
   if (loadError)
     return (
       <div className="loading">
@@ -218,6 +234,24 @@ export function App() {
     );
   const site = register.sites.find((s) => s.id === siteId) ?? register.sites[0];
   if (!site) return <div className="loading">No sites are configured.</div>;
+  const isVisibleRemoval = (item: { status: string; removedAt?: string }) =>
+      item.status !== "Removed" ||
+      !item.removedAt ||
+      !publishedAt ||
+      new Date(item.removedAt).getTime() > new Date(publishedAt).getTime(),
+    visibleDevices = site.devices.filter(isVisibleRemoval),
+    visibleDeviceIds = new Set(visibleDevices.map((device) => device.id)),
+    visibleConnections = site.connections.filter(
+      (connection) =>
+        isVisibleRemoval(connection) &&
+        visibleDeviceIds.has(connection.source) &&
+        visibleDeviceIds.has(connection.target),
+    ),
+    visibleSite = {
+      ...site,
+      devices: visibleDevices,
+      connections: visibleConnections,
+    };
   const updateSite = (fn: (s: Site) => Site) =>
     setRegister({
       ...register,
@@ -251,17 +285,23 @@ export function App() {
     });
     showNotice("Site relationship saved");
   };
-  const deleteSiteRelationship = (id: string) => {
-    if (!window.confirm("Remove this site relationship?")) return;
-    setRegister({
-      ...register,
-      updatedAt: new Date().toISOString(),
-      siteRelationships: (register.siteRelationships ?? []).filter(
-        (link) => link.id !== id,
-      ),
+  const deleteSiteRelationship = (id: string) =>
+    setActionDialog({
+      title: "Remove this site relationship?",
+      message:
+        "The relationship will be removed from the organisation map when the draft saves.",
+      confirmLabel: "Remove relationship",
+      onConfirm: () => {
+        setRegister({
+          ...register,
+          updatedAt: new Date().toISOString(),
+          siteRelationships: (register.siteRelationships ?? []).filter(
+            (link) => link.id !== id,
+          ),
+        });
+        showNotice("Site relationship removed");
+      },
     });
-    showNotice("Site relationship removed");
-  };
   const selectedDevice =
       selection?.kind === "device"
         ? site.devices.find((d) => d.id === selection.id)
@@ -284,19 +324,31 @@ export function App() {
     setSelection({ kind: "device", id: device.id });
     showNotice("Device saved");
   };
-  const removeDevice = (id: string) => {
-    if (!window.confirm("Remove this device and all of its connections?"))
-      return;
-    updateSite((s) => ({
-      ...s,
-      devices: s.devices.filter((d) => d.id !== id),
-      connections: s.connections.filter(
-        (c) => c.source !== id && c.target !== id,
-      ),
-    }));
-    setSelection(null);
-    showNotice("Device removed");
-  };
+  const removeDevice = (id: string) =>
+    setActionDialog({
+      title: "Remove this device?",
+      message:
+        "The device and its connections will remain as a red draft ghost until this location is published.",
+      confirmLabel: "Remove device",
+      onConfirm: () => {
+        const removedAt = new Date().toISOString();
+        updateSite((s) => ({
+          ...s,
+          devices: s.devices.map((device) =>
+            device.id === id
+              ? { ...device, status: "Removed", removedAt }
+              : device,
+          ),
+          connections: s.connections.map((connection) =>
+            connection.source === id || connection.target === id
+              ? { ...connection, status: "Removed", removedAt }
+              : connection,
+          ),
+        }));
+        setSelection(null);
+        showNotice("Device removed");
+      },
+    });
   const saveConnection = (connection: NetworkConnection) => {
     updateSite((s) => ({
       ...s,
@@ -307,15 +359,29 @@ export function App() {
     setSelection({ kind: "connection", id: connection.id });
     showNotice("Connection saved");
   };
-  const removeConnection = (id: string) => {
-    if (!window.confirm("Remove this connection?")) return;
-    updateSite((s) => ({
-      ...s,
-      connections: s.connections.filter((c) => c.id !== id),
-    }));
-    setSelection(null);
-    showNotice("Connection removed");
-  };
+  const removeConnection = (id: string) =>
+    setActionDialog({
+      title: "Remove this connection?",
+      message:
+        "The link will remain as a red draft ghost until this location is published.",
+      confirmLabel: "Remove connection",
+      onConfirm: () => {
+        updateSite((s) => ({
+          ...s,
+          connections: s.connections.map((connection) =>
+            connection.id === id
+              ? {
+                  ...connection,
+                  status: "Removed",
+                  removedAt: new Date().toISOString(),
+                }
+              : connection,
+          ),
+        }));
+        setSelection(null);
+        showNotice("Connection removed");
+      },
+    });
   const newDevice = (template?: DeviceTemplate) => {
     const base = blankDevice(),
       d: NetworkDevice = template
@@ -332,6 +398,58 @@ export function App() {
     saveDevice(d);
     setView("topology");
     setPaletteOpen(false);
+  };
+  const addDeviceAt = (position: { x: number; y: number }) => {
+    const device = { ...blankDevice(), position };
+    updateSite((current) => ({
+      ...current,
+      devices: [...current.devices, device],
+    }));
+    setSelection({ kind: "device", id: device.id });
+    showNotice("Device added");
+  };
+  const addAttachedDevice = (sourceId: string, side: "before" | "after") => {
+    const source = site.devices.find((device) => device.id === sourceId);
+    if (!source) return;
+    const horizontal = side === "after" ? 288 : -288,
+      offsets = [0, 144, -144, 288, -288, 432, -432],
+      occupied = (position: { x: number; y: number }) =>
+        visibleSite.devices.some(
+          (device) =>
+            Math.abs(device.position.x - position.x) < 250 &&
+            Math.abs(device.position.y - position.y) < 125,
+        );
+    let position = {
+      x: source.position.x + horizontal,
+      y: source.position.y,
+    };
+    for (const lane of [1, 2, 3]) {
+      const candidateX = source.position.x + horizontal * lane;
+      const available = offsets
+        .map((offset) => ({ x: candidateX, y: source.position.y + offset }))
+        .find((candidate) => !occupied(candidate));
+      if (available) {
+        position = available;
+        break;
+      }
+    }
+    const device = { ...blankDevice(), position },
+      connection: NetworkConnection = {
+        id: uid("connection"),
+        source: side === "after" ? source.id : device.id,
+        target: side === "after" ? device.id : source.id,
+        label: "New connection",
+        connectionType: "Ethernet",
+        status: "Needs Verification",
+        state: "Current",
+      };
+    updateSite((current) => ({
+      ...current,
+      devices: [...current.devices, device],
+      connections: [...current.connections, connection],
+    }));
+    setSelection({ kind: "device", id: device.id });
+    showNotice("Attached device added");
   };
   const connect = (c: Connection) => {
     if (!c.source || !c.target || c.source === c.target) return;
@@ -369,9 +487,16 @@ export function App() {
       setSelection(null);
       showNotice("Network register imported");
     } catch (e) {
-      window.alert(
-        e instanceof Error ? e.message : "Could not import the register.",
-      );
+      setActionDialog({
+        title: "The register was not imported",
+        message:
+          e instanceof Error
+            ? e.message
+            : "The selected file could not be read.",
+        confirmLabel: "Choose another file",
+        tone: "info",
+        onConfirm: () => importRef.current?.click(),
+      });
     } finally {
       if (importRef.current) importRef.current.value = "";
     }
@@ -388,22 +513,61 @@ export function App() {
       ["ip-plan", "IP plan", CircleDot],
       ["report", "Report", Printer],
     ],
-    known = site.devices.filter((d) => d.status === "Known").length,
-    unknown = site.devices.filter(
+    known = visibleSite.devices.filter((d) => d.status === "Known").length,
+    unknown = visibleSite.devices.filter(
       (d) => d.status === "Needs Verification",
     ).length,
-    planned = site.devices.filter((d) => d.status === "Planned").length;
+    planned = visibleSite.devices.filter((d) => d.status === "Planned").length;
   const isAdmin = user?.role === "admin",
     isPublished =
       publishedVersion === versionRef.current &&
       sync !== "saving" &&
       sync !== "error";
+  const publishSite = async () => {
+    if (isPublished || publishing || sync === "saving" || sync === "error")
+      return;
+    setPublishing(true);
+    try {
+      const response = await authenticatedFetch("/api/publications", {
+          method: "POST",
+          body: JSON.stringify({
+            siteId: site.id,
+            version: versionRef.current,
+            releaseNote: "",
+          }),
+        }),
+        data = (await response.json()) as {
+          error?: string;
+          publishedVersion?: number;
+          publishedAt?: string;
+        };
+      if (!response.ok)
+        throw new Error(
+          data.error === "conflict"
+            ? "A newer draft exists. Refresh before publishing."
+            : data.error || "Could not publish this location.",
+        );
+      if (data.publishedVersion !== undefined)
+        setPublishedVersion(data.publishedVersion);
+      if (data.publishedAt) setPublishedAt(data.publishedAt);
+      showNotice("Location published");
+    } catch (cause) {
+      if (cause instanceof SessionExpiredError) return endSession();
+      showNotice(
+        cause instanceof Error
+          ? cause.message
+          : "Could not publish this location.",
+      );
+    } finally {
+      setPublishing(false);
+    }
+  };
   return (
     <div className="app-shell">
       <header className="app-header">
         <div className="brand">
           <span className="brand-mark">
-            <Network size={20} />
+            <img src="/statefile-mark.svg" alt="" />
           </span>
           <div>
             <b>Network Builder</b>
@@ -447,13 +611,33 @@ export function App() {
                   : user?.email || "Shared register"}
           </span>
           {page === "site" && (
-            <button
-              className={`quiet ${isPublished ? "published-button" : ""}`}
-              disabled={isPublished || sync === "saving" || sync === "error"}
-              onClick={() => setPublishOpen(true)}
-            >
-              <UploadCloud size={16} /> {isPublished ? "PUBLISHED" : "Publish"}
-            </button>
+            <div className="publish-split">
+              <button
+                className={`quiet ${isPublished ? "published-button" : ""}`}
+                disabled={
+                  isPublished ||
+                  publishing ||
+                  sync === "saving" ||
+                  sync === "error"
+                }
+                onClick={() => void publishSite()}
+              >
+                <UploadCloud size={16} />
+                {publishing
+                  ? "Publishing…"
+                  : isPublished
+                    ? "PUBLISHED"
+                    : "Publish"}
+              </button>
+              <button
+                className="quiet publish-history-button"
+                title="Publication history"
+                aria-label="Open publication history"
+                onClick={() => setHistoryOpen(true)}
+              >
+                <ChevronDown size={15} />
+              </button>
+            </div>
           )}
           {isAdmin && (
             <>
@@ -482,11 +666,11 @@ export function App() {
           </button>
           {isCloudMode && (
             <button
-              className="icon-button"
+              className="icon-button account-button"
               title="Account and access"
               onClick={() => setAccountOpen(true)}
             >
-              <Settings size={17} />
+              <UserRound size={19} />
             </button>
           )}
         </div>
@@ -545,35 +729,45 @@ export function App() {
               <div className="canvas-frame">
                 <div className="state-legend">
                   <span>
-                    <i className="current" />
-                    Current state
-                  </span>
-                  <span>
-                    <i className="future" />
-                    Future / planned
+                    <i className="known" />
+                    Known
                   </span>
                   <span>
                     <i className="unknown" />
                     Needs verification
                   </span>
+                  <span>
+                    <i className="planned" />
+                    Planned / retired
+                  </span>
+                  <span>
+                    <i className="danger" />
+                    Compromised / removed
+                  </span>
                 </div>
-                {site.devices.length ? (
+                {visibleSite.devices.length ? (
                   <Topology
-                    devices={site.devices}
-                    connections={site.connections}
+                    devices={visibleSite.devices}
+                    connections={visibleSite.connections}
                     onDeviceClick={(id) => setSelection({ kind: "device", id })}
                     onConnectionClick={(id) =>
                       setSelection({ kind: "connection", id })
                     }
-                    onMove={(id, position) =>
+                    onMoveMany={(positions) => {
+                      const moved = new globalThis.Map(
+                        positions.map((item) => [item.id, item.position]),
+                      );
                       updateSite((s) => ({
                         ...s,
-                        devices: s.devices.map((d) =>
-                          d.id === id ? { ...d, position } : d,
-                        ),
-                      }))
-                    }
+                        devices: s.devices.map((device) => ({
+                          ...device,
+                          position: moved.get(device.id) ?? device.position,
+                        })),
+                      }));
+                    }}
                     onConnect={connect}
+                    onQuickAdd={addAttachedDevice}
+                    onAddAt={addDeviceAt}
                   />
                 ) : (
                   <div className="empty-state">
@@ -592,7 +786,7 @@ export function App() {
             )}
             {view === "assets" && (
               <AssetRegister
-                devices={site.devices}
+                devices={visibleSite.devices}
                 onEdit={(id) => setSelection({ kind: "device", id })}
                 onAdd={() => setPaletteOpen(true)}
               />
@@ -618,7 +812,7 @@ export function App() {
                     <Printer size={16} /> Print / save PDF
                   </button>
                 </div>
-                <ManagementReport site={site} />
+                <ManagementReport site={visibleSite} />
               </>
             )}
           </main>
@@ -653,12 +847,11 @@ export function App() {
           onClose={() => setPaletteOpen(false)}
         />
       )}{" "}
-      {publishOpen && (
-        <PublishDialog
+      {historyOpen && (
+        <PublicationHistoryDialog
           site={site}
-          version={versionRef.current}
           canRestore={isAdmin && isCloudMode}
-          onClose={() => setPublishOpen(false)}
+          onClose={() => setHistoryOpen(false)}
           onRestored={() => window.location.reload()}
         />
       )}{" "}
@@ -667,6 +860,12 @@ export function App() {
           user={user}
           sites={register.sites}
           onClose={() => setAccountOpen(false)}
+        />
+      )}{" "}
+      {actionDialog && (
+        <ActionDialog
+          request={actionDialog}
+          onClose={() => setActionDialog(null)}
         />
       )}{" "}
       {notice && (

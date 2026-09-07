@@ -14,15 +14,17 @@ import {
   Fingerprint,
   KeyRound,
   LockKeyhole,
-  Network,
   ShieldCheck,
 } from "lucide-react";
 import { setCsrfToken } from "../data/storage";
 import "./AuthGate.css";
 interface Status {
   setupRequired: boolean;
+  standaloneSetup?: boolean;
   authenticated: boolean;
+  accessEmail?: string | null;
   csrfToken?: string;
+  expiresAt?: string;
 }
 interface SetupDetails {
   displayName: string;
@@ -69,6 +71,15 @@ export function AuthGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refresh();
   }, []);
+  useEffect(() => {
+    if (!status?.authenticated || !status.expiresAt) return;
+    const remaining = new Date(status.expiresAt).getTime() - Date.now();
+    const timer = window.setTimeout(
+      () => void refresh(),
+      Math.max(0, remaining) + 250,
+    );
+    return () => window.clearTimeout(timer);
+  }, [status?.authenticated, status?.expiresAt]);
   if (error && !status)
     return (
       <AuthShell>
@@ -99,11 +110,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
     );
   if (status.authenticated) return <>{children}</>;
   const supported = browserSupportsWebAuthn(),
-    setupToken = window.location.hash.startsWith("#setup/")
-      ? window.location.hash.slice(7)
-      : "",
     inviteToken = window.location.hash.startsWith("#invite/")
       ? window.location.hash.slice(8)
+      : "",
+    resetToken = window.location.hash.startsWith("#reset/")
+      ? window.location.hash.slice(7)
       : "";
   const setup = async (details: SetupDetails) => {
     setBusy(true);
@@ -123,7 +134,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
         });
       if (typeof verified.csrfToken === "string")
         setCsrfToken(verified.csrfToken);
-      window.history.replaceState(null, "", "#dashboard");
       await refresh();
     } catch (cause) {
       setError(
@@ -189,11 +199,39 @@ export function AuthGate({ children }: { children: ReactNode }) {
       setBusy(false);
     }
   };
+  const resetPasskeys = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const generated = (await post("/api/auth/reset/options", {
+          token: resetToken,
+        })) as unknown as {
+          options: PublicKeyCredentialCreationOptionsJSON;
+          challengeId: string;
+        },
+        response = await startRegistration({ optionsJSON: generated.options }),
+        verified = await post("/api/auth/reset/verify", {
+          challengeId: generated.challengeId,
+          response,
+        });
+      if (typeof verified.csrfToken === "string")
+        setCsrfToken(verified.csrfToken);
+      window.history.replaceState(null, "", "#dashboard");
+      await refresh();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Passkey reset failed.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <AuthShell>
       {status.setupRequired ? (
         <AdminSetup
-          setupToken={setupToken}
+          email={status.accessEmail ?? ""}
+          standalone={Boolean(status.standaloneSetup)}
           supported={supported}
           busy={busy}
           error={error}
@@ -214,6 +252,26 @@ export function AuthGate({ children }: { children: ReactNode }) {
           >
             <Fingerprint size={17} />
             Create your passkey
+          </button>
+        </div>
+      ) : resetToken ? (
+        <div className="auth-panel">
+          <span className="auth-icon">
+            <Fingerprint size={28} />
+          </span>
+          <h1>Reset your passkeys</h1>
+          <p>
+            Create a replacement passkey. Your old passkeys and sessions will be
+            revoked when this completes.
+          </p>
+          {error && <div className="auth-error">{error}</div>}
+          <button
+            className="primary auth-primary"
+            disabled={!supported || busy}
+            onClick={() => void resetPasskeys()}
+          >
+            <Fingerprint size={17} />
+            {busy ? "Opening passkey provider…" : "Create replacement passkey"}
           </button>
         </div>
       ) : (
@@ -240,25 +298,27 @@ export function AuthGate({ children }: { children: ReactNode }) {
   );
 }
 function AdminSetup({
-  setupToken,
+  email,
+  standalone,
   supported,
   busy,
   error,
   onSubmit,
 }: {
-  setupToken: string;
+  email: string;
+  standalone: boolean;
   supported: boolean;
   busy: boolean;
   error: string;
   onSubmit: (details: SetupDetails) => Promise<void>;
 }) {
   const [step, setStep] = useState<1 | 2>(1),
-    [identifier, setIdentifier] = useState(""),
-    valid = identifier.trim().length >= 2 && setupToken.length >= 16,
+    [identifier, setIdentifier] = useState(email),
+    valid = identifier.trim().length >= 2,
     details = {
       displayName: identifier.trim(),
       email: identifier.trim(),
-      setupCode: setupToken,
+      setupCode: "",
     };
   if (step === 2)
     return (
@@ -312,16 +372,12 @@ function AdminSetup({
           autoFocus
           required
           maxLength={254}
+          readOnly={!standalone}
           value={identifier}
           onChange={(event) => setIdentifier(event.target.value)}
           placeholder="Name or email"
         />
       </label>
-      {!setupToken && (
-        <div className="auth-error">
-          Open the private setup link created by the operator.
-        </div>
-      )}
       <button
         className="primary auth-primary"
         disabled={!supported || busy || !valid}
@@ -337,7 +393,7 @@ function AuthShell({ children }: { children: ReactNode }) {
       <div className="auth-grid" />
       <header className="auth-brand">
         <span>
-          <Network size={21} />
+          <img src="/statefile-mark.svg" alt="" />
         </span>
         <div>
           <b>Network Builder</b>
