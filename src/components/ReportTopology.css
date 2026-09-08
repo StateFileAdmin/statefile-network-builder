@@ -12,7 +12,7 @@
 }
 .report-connections path {
   fill: none;
-  stroke: #5a83a2;
+  stroke: #34d399;
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
 }
@@ -26,13 +26,22 @@
   font-size: 9px;
   font-weight: 600;
 }
-.report-connections .report-connection-future path {
-  stroke: #8175c9;
+.report-connections .report-connection-future path,
+.report-connections .report-connection-planned path,
+.report-connections .report-connection-retired path {
+  stroke: #3d75ed;
   stroke-dasharray: 7 5;
+}
+.report-connections .report-connection-needs-verification path {
+  stroke: #fbbf24;
+}
+.report-connections .report-connection-compromised path,
+.report-connections .report-connection-removed path {
+  stroke: #f87171;
 }
 .report-devices rect {
   fill: #fff;
-  stroke: #5d819c;
+  stroke: #34d399;
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
 }
@@ -57,19 +66,32 @@
   fill: #718494;
   font-size: 8px;
 }
-.report-devices .report-device-future rect {
-  fill: #f5f3ff;
-  stroke: #8175c9;
+.report-devices .report-device-future rect,
+.report-devices .report-device-retired rect {
+  fill: #f5f7ff;
+  stroke: #3d75ed;
   stroke-dasharray: 6 4;
 }
 .report-devices .report-device-future circle {
   fill: #8175c9;
 }
 .report-devices .report-device-unverified rect {
-  stroke: #c69135;
+  stroke: #fbbf24;
 }
-.report-devices .report-device-unverified circle {
-  fill: #d49a38;
+.report-devices .report-device-retired rect {
+  fill: #f5f7ff;
+  stroke: #3d75ed;
+  stroke-dasharray: 6 4;
+}
+.report-devices .report-device-compromised rect {
+  stroke: #f87171;
+}
+.report-diagram,
+.report-diagram *,
+.report-diagram-legend,
+.report-diagram-legend * {
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
 }
 .report-diagram-legend {
   display: flex;
@@ -88,13 +110,16 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #4c95c8;
+  background: #34d399;
 }
 .report-diagram-legend i.future {
-  background: #8175c9;
+  background: #3d75ed;
 }
 .report-diagram-legend i.unverified {
-  background: #d49a38;
+  background: #fbbf24;
+}
+.report-diagram-legend i.danger {
+  background: #f87171;
 }
 .report-topology-empty {
   padding: 40px;

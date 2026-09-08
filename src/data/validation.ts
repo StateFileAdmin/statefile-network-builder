@@ -1,5 +1,6 @@
 import type {
   InfrastructureState,
+  DeviceLifecycle,
   IpPlanEntry,
   NetworkConnection,
   NetworkDevice,
@@ -24,6 +25,14 @@ const statuses = new Set<RecordStatus>([
   "Removed",
 ]);
 const states = new Set<InfrastructureState>(["Current", "Future"]);
+const lifecycles = new Set<DeviceLifecycle>([
+  "Active",
+  "Standby",
+  "Legacy",
+  "Disconnected",
+  "Planned",
+  "Retired",
+]);
 const object = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const text = (value: unknown, max = 500) =>
@@ -49,6 +58,15 @@ function validDevice(value: unknown): value is NetworkDevice {
     text(value.model) &&
     (value.wirelessNetworks === undefined ||
       text(value.wirelessNetworks, 2000)) &&
+    (value.operatingMode === undefined ||
+      value.operatingMode === "Router only" ||
+      value.operatingMode === "Router + wireless access point" ||
+      value.operatingMode === "Access point only") &&
+    (value.quantity === undefined ||
+      (typeof value.quantity === "number" &&
+        Number.isSafeInteger(value.quantity) &&
+        value.quantity >= 1 &&
+        value.quantity <= 10000)) &&
     text(value.managementIp) &&
     text(value.subnetVlan) &&
     text(value.macAddress) &&
@@ -61,6 +79,9 @@ function validDevice(value: unknown): value is NetworkDevice {
     (value.removedAt === undefined || text(value.removedAt, 100)) &&
     status(value.status) &&
     state(value.state) &&
+    (value.lifecycle === undefined ||
+      (typeof value.lifecycle === "string" &&
+        lifecycles.has(value.lifecycle as DeviceLifecycle))) &&
     object(value.position) &&
     typeof value.position.x === "number" &&
     Number.isFinite(value.position.x) &&

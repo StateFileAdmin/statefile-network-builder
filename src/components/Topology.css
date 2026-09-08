@@ -2,6 +2,39 @@
   z-index: 6;
 }
 
+.edge-hover-target {
+  pointer-events: stroke;
+}
+
+.edge-overlay {
+  position: absolute;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  pointer-events: all;
+}
+
+.edge-overlay .edge-label {
+  position: static;
+}
+
+.edge-delete {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-color: rgba(248, 113, 113, 0.5);
+  background: #171313;
+  color: var(--red);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.42);
+}
+
+.edge-delete:hover,
+.edge-delete:focus-visible {
+  border-color: var(--red);
+  background: #281616;
+}
+
 .edge-label {
   position: absolute;
   z-index: 6;

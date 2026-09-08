@@ -1,19 +1,20 @@
 import type { Site } from "../types";
+import { connectionStatusFor, deviceIsRetired } from "../data/deviceStatus";
 import { StatusBadge } from "./Registers";
 import "./ReportTopology.css";
 const clip = (value: string, length = 28) =>
   value.length > length ? `${value.slice(0, length - 1)}…` : value;
+const displayDeviceType = (device: Site["devices"][number]) =>
+  device.operatingMode === "Access point only"
+    ? "Wireless access point"
+    : device.operatingMode === "Router + wireless access point"
+      ? "Router / wireless access point"
+      : device.deviceType;
 function ReportTopology({ site }: { site: Site }) {
-  const devices = site.devices.filter(
-      (d) => d.status !== "Retired" && d.status !== "Removed",
-    ),
+  const devices = site.devices.filter((d) => d.status !== "Removed"),
     ids = new Set(devices.map((d) => d.id)),
     connections = site.connections.filter(
-      (c) =>
-        ids.has(c.source) &&
-        ids.has(c.target) &&
-        c.status !== "Retired" &&
-        c.status !== "Removed",
+      (c) => ids.has(c.source) && ids.has(c.target) && c.status !== "Removed",
     );
   if (!devices.length)
     return (
@@ -65,6 +66,13 @@ function ReportTopology({ site }: { site: Site }) {
           {connections.map((c) => {
             const source = coords.get(c.source)!,
               target = coords.get(c.target)!,
+              sourceDevice = devices.find((d) => d.id === c.source),
+              targetDevice = devices.find((d) => d.id === c.target),
+              effectiveStatus = connectionStatusFor(
+                sourceDevice,
+                targetDevice,
+                c.status,
+              ),
               sx = source.x + nodeWidth,
               sy = source.y + nodeHeight / 2,
               tx = target.x,
@@ -78,9 +86,7 @@ function ReportTopology({ site }: { site: Site }) {
             return (
               <g
                 key={c.id}
-                className={
-                  c.state === "Future" ? "report-connection-future" : ""
-                }
+                className={`${c.state === "Future" ? "report-connection-future" : ""} report-connection-${effectiveStatus.toLowerCase().replaceAll(" ", "-")}`}
               >
                 <path
                   d={`M ${sx} ${sy} C ${mx} ${sy}, ${mx} ${ty}, ${tx} ${ty}`}
@@ -107,20 +113,22 @@ function ReportTopology({ site }: { site: Site }) {
               <g
                 key={d.id}
                 transform={`translate(${p.x} ${p.y})`}
-                className={`${d.state === "Future" ? "report-device-future" : ""} ${d.status === "Needs Verification" ? "report-device-unverified" : ""} ${d.status === "Compromised" ? "report-device-compromised" : ""}`}
+                className={`${d.state === "Future" ? "report-device-future" : ""} ${deviceIsRetired(d) ? "report-device-retired" : ""} ${d.status === "Needs Verification" ? "report-device-unverified" : ""} ${d.status === "Compromised" ? "report-device-compromised" : ""}`}
               >
                 <rect width={nodeWidth} height={nodeHeight} rx="8" />
                 <text className="device-kind" x="14" y="22">
-                  {clip(d.deviceType.toUpperCase(), 30)}
+                  {clip(displayDeviceType(d).toUpperCase(), 30)}
                 </text>
                 <text className="device-name" x="14" y="47">
                   {clip(d.hostname, 27)}
                 </text>
                 <text className="device-detail" x="14" y="68">
                   {clip(
-                    [d.manufacturer, d.model].filter(Boolean).join(" · ") ||
-                      d.connectionType ||
-                      "Details required",
+                    d.quantity
+                      ? `${d.quantity} ${d.quantity === 1 ? "camera" : "cameras"}`
+                      : [d.manufacturer, d.model].filter(Boolean).join(" · ") ||
+                          d.connectionType ||
+                          "Details required",
                     36,
                   )}
                 </text>
@@ -130,7 +138,7 @@ function ReportTopology({ site }: { site: Site }) {
                   y="18"
                   textAnchor="end"
                 >
-                  {d.state}
+                  {deviceIsRetired(d) ? "Retired" : (d.lifecycle ?? d.state)}
                 </text>
               </g>
             );
@@ -158,7 +166,13 @@ function ReportTopology({ site }: { site: Site }) {
     </div>
   );
 }
-export function ManagementReport({ site }: { site: Site }) {
+export function ManagementReport({
+  site,
+  version,
+}: {
+  site: Site;
+  version: number;
+}) {
   const current = site.devices.filter(
     (d) => d.state === "Current" && d.status !== "Retired",
   );
@@ -183,7 +197,7 @@ export function ManagementReport({ site }: { site: Site }) {
             year: "numeric",
           })}
           <br />
-          Register version 1
+          Register version {version}
         </div>
       </header>
       <section className="report-intro">
@@ -209,7 +223,7 @@ export function ManagementReport({ site }: { site: Site }) {
         </div>
       </section>
       <section className="report-topology-section">
-        <h2>Current and future-state topology</h2>
+        <h2>Current, planned and retired topology</h2>
         <ReportTopology site={site} />
         <p className="report-note">
           Diagram reflects saved topology positions. Public WAN addresses and
@@ -232,10 +246,12 @@ export function ManagementReport({ site }: { site: Site }) {
             {current.map((d) => (
               <tr key={d.id}>
                 <td>{d.hostname}</td>
-                <td>{d.deviceType}</td>
+                <td>{displayDeviceType(d)}</td>
                 <td>
-                  {[d.manufacturer, d.model].filter(Boolean).join(" · ") ||
-                    "Not recorded"}
+                  {d.deviceType === "Client group"
+                    ? "Not applicable"
+                    : [d.manufacturer, d.model].filter(Boolean).join(" · ") ||
+                      "Not recorded"}
                 </td>
                 <td>{d.physicalLocation || "Not recorded"}</td>
                 <td>

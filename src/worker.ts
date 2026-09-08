@@ -395,6 +395,45 @@ export default {
         });
       }
 
+      const publicationMatch = url.pathname.match(
+        /^\/api\/publications\/(\d+)$/,
+      );
+      if (publicationMatch && request.method === "GET") {
+        const publication = await env.DB.prepare(
+          "SELECT id,site_id,document,register_version,release_note,published_at,published_by FROM register_publication WHERE id=? AND register_id=?",
+        )
+          .bind(Number(publicationMatch[1]), REGISTER_ID)
+          .first<{
+            id: number;
+            site_id: string;
+            document: string;
+            register_version: number;
+            release_note: string;
+            published_at: string;
+            published_by: string;
+          }>();
+        if (!publication)
+          return json({ error: "Published version not found." }, 404);
+        if (!canAccessSite(user, publication.site_id))
+          return json({ error: "Not allowed." }, 403);
+        const publishedSite = JSON.parse(publication.document) as Site;
+        if (
+          !validSite(publishedSite) ||
+          publishedSite.id !== publication.site_id
+        )
+          return json({ error: "Published version is invalid." }, 409);
+        return json({
+          publication: {
+            id: publication.id,
+            register_version: publication.register_version,
+            release_note: publication.release_note,
+            published_at: publication.published_at,
+            published_by: publication.published_by,
+            site: publishedSite,
+          },
+        });
+      }
+
       const restoreMatch = url.pathname.match(
         /^\/api\/publications\/(\d+)\/restore$/,
       );

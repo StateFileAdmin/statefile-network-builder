@@ -1,6 +1,13 @@
 import { AlertTriangle, Pencil, Plus, Trash2 } from "lucide-react";
 import type { IpPlanEntry, NetworkDevice, RecordStatus } from "../types";
 import { CustomSelect } from "./FormControls";
+const lifecycle = (device: NetworkDevice) =>
+  device.lifecycle ??
+  (device.status === "Retired"
+    ? "Retired"
+    : device.status === "Planned" || device.state === "Future"
+      ? "Planned"
+      : "Active");
 const statusOptions = [
   "Known",
   "Needs Verification",
@@ -64,7 +71,7 @@ export function AssetRegister({
                 >
                   <td>
                     <b>{d.hostname}</b>
-                    <small>{d.state} state</small>
+                    <small>{lifecycle(d)}</small>
                   </td>
                   <td>{d.deviceType}</td>
                   <td>

@@ -42,6 +42,7 @@ import {
   validateImport,
 } from "./data/storage";
 import { MAX_REGISTER_BYTES } from "./data/validation";
+import { connectionStatusFor } from "./data/deviceStatus";
 import type {
   NetworkConnection,
   NetworkDevice,
@@ -72,6 +73,7 @@ const blankDevice = (): NetworkDevice => ({
   lastVerified: "",
   status: "Needs Verification",
   state: "Current",
+  lifecycle: "Active",
   position: { x: 300, y: 250 },
 });
 const defaultDeviceName = (
@@ -90,16 +92,71 @@ const defaultDeviceName = (
   while (used.has(number)) number += 1;
   return `AP-${String(number).padStart(2, "0")}`;
 };
+const normaliseDeviceTypes = (register: NetworkRegister) => {
+  let changed = false;
+  const sites = register.sites.map((site) => ({
+    ...site,
+    devices: site.devices.map((device) => {
+      const type = device.deviceType.trim().toLowerCase(),
+        legacyType = type === "wireless network",
+        legacyCombinedRouter =
+          type.includes("router") &&
+          (type.includes("wi-fi") ||
+            type.includes("wifi") ||
+            type.includes("wireless")),
+        normalisedType = legacyType
+          ? "Wireless access point"
+          : legacyCombinedRouter
+            ? "Router"
+            : device.deviceType,
+        operatingMode =
+          device.operatingMode ??
+          (normalisedType === "Router"
+            ? legacyCombinedRouter
+              ? "Router + wireless access point"
+              : "Router only"
+            : undefined);
+      if (
+        !legacyType &&
+        !legacyCombinedRouter &&
+        operatingMode === device.operatingMode
+      )
+        return device;
+      changed = true;
+      return { ...device, deviceType: normalisedType, operatingMode };
+    }),
+  }));
+  const normalisedSites = sites.map((site) => ({
+    ...site,
+    connections: site.connections.map((connection) => {
+      const source = site.devices.find(
+          (device) => device.id === connection.source,
+        ),
+        target = site.devices.find((device) => device.id === connection.target),
+        status = connectionStatusFor(source, target, connection.status);
+      if (status === connection.status) return connection;
+      changed = true;
+      return { ...connection, status };
+    }),
+  }));
+  return changed
+    ? {
+        ...register,
+        sites: normalisedSites,
+        updatedAt: new Date().toISOString(),
+      }
+    : register;
+};
 const readRoute = () => {
   const parts = window.location.hash.slice(1).split("/"),
     views: View[] = ["topology", "assets", "ip-plan", "report"];
   if (parts[0] !== "site")
     return {
       page: "dashboard" as const,
-      siteId: "west-perth",
+      siteId: "",
       view: "topology" as View,
     };
-  let siteId = "west-perth";
+  let siteId = "";
   try {
     siteId = decodeURIComponent(parts[1] || siteId);
   } catch {
@@ -134,6 +191,7 @@ export function App() {
     [user, setUser] = useState<CurrentUser | null>(null),
     [accountOpen, setAccountOpen] = useState(false),
     [historyOpen, setHistoryOpen] = useState(false),
+    [topologyDragging, setTopologyDragging] = useState(false),
     [publishing, setPublishing] = useState(false),
     [publishedVersion, setPublishedVersion] = useState<number | null>(null),
     [publishedAt, setPublishedAt] = useState<string | null>(null),
@@ -190,14 +248,15 @@ export function App() {
           registerRepository.load(),
           registerRepository.session(),
         ]);
+        const normalisedRegister = normaliseDeviceTypes(loaded.register);
         versionRef.current = loaded.version;
         syncedRef.current = loaded.register;
-        setRegister(loaded.register);
+        setRegister(normalisedRegister);
         setUser(session);
         document.documentElement.dataset.role = session.role;
         clearLegacyLocalData();
-        if (!loaded.register.sites.some((s) => s.id === siteId))
-          setSiteId(loaded.register.sites[0]?.id || "");
+        if (!normalisedRegister.sites.some((s) => s.id === siteId))
+          setSiteId(normalisedRegister.sites[0]?.id || "");
       } catch (error) {
         if (error instanceof SessionExpiredError) return endSession();
         setLoadError(
@@ -210,12 +269,12 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!register || register === syncedRef.current) return;
+    if (!register || register === syncedRef.current || topologyDragging) return;
     const timer = window.setTimeout(() => {
       void persist(register);
     }, SAVE_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [register]);
+  }, [register, topologyDragging]);
 
   useEffect(() => {
     const hash =
@@ -283,6 +342,66 @@ export function App() {
       updatedAt: new Date().toISOString(),
       sites: register.sites.map((s) => (s.id === site.id ? fn(s) : s)),
     });
+  const cleanUpTopology = () => {
+    updateSite((current) => {
+      const ids = new Set(current.devices.map((device) => device.id)),
+        outgoing = new globalThis.Map<string, string[]>(),
+        incoming = new globalThis.Map(
+          current.devices.map((device) => [device.id, 0]),
+        );
+      current.connections.forEach((connection) => {
+        if (!ids.has(connection.source) || !ids.has(connection.target)) return;
+        outgoing.set(connection.source, [
+          ...(outgoing.get(connection.source) ?? []),
+          connection.target,
+        ]);
+        incoming.set(
+          connection.target,
+          (incoming.get(connection.target) ?? 0) + 1,
+        );
+      });
+      const levels = new globalThis.Map<string, number>(),
+        queue = current.devices
+          .filter((device) => (incoming.get(device.id) ?? 0) === 0)
+          .map((device) => device.id);
+      if (!queue.length && current.devices[0])
+        queue.push(current.devices[0].id);
+      queue.forEach((id) => levels.set(id, 0));
+      for (let index = 0; index < queue.length; index += 1) {
+        const id = queue[index],
+          level = levels.get(id) ?? 0;
+        for (const target of outgoing.get(id) ?? []) {
+          const nextLevel = Math.max(levels.get(target) ?? 0, level + 1);
+          if (!levels.has(target)) queue.push(target);
+          levels.set(target, nextLevel);
+        }
+      }
+      current.devices.forEach((device) => {
+        if (!levels.has(device.id)) levels.set(device.id, 0);
+      });
+      const columns = new globalThis.Map<number, NetworkDevice[]>();
+      current.devices.forEach((device) => {
+        const level = levels.get(device.id) ?? 0;
+        columns.set(level, [...(columns.get(level) ?? []), device]);
+      });
+      columns.forEach((devices) =>
+        devices.sort((a, b) => a.position.y - b.position.y),
+      );
+      return {
+        ...current,
+        devices: current.devices.map((device) => {
+          const level = levels.get(device.id) ?? 0,
+            column = columns.get(level) ?? [],
+            row = column.findIndex((item) => item.id === device.id);
+          return {
+            ...device,
+            position: { x: 48 + level * 288, y: 72 + row * 144 },
+          };
+        }),
+      };
+    });
+    showNotice("Topology cleaned up");
+  };
   const openSite = (id: string) => {
     setSiteId(id);
     setPage("site");
@@ -350,9 +469,10 @@ export function App() {
         connections: s.connections.map((connection) => {
           const source = devices.find((d) => d.id === connection.source),
             target = devices.find((d) => d.id === connection.target);
-          return source?.status === "Known" && target?.status === "Known"
-            ? { ...connection, status: "Known" }
-            : connection;
+          const status = connectionStatusFor(source, target, connection.status);
+          return status === connection.status
+            ? connection
+            : { ...connection, status };
         }),
       };
     });
@@ -411,9 +531,13 @@ export function App() {
             position: pendingPosition ?? base.position,
             hostname: defaultDeviceName(template, site.devices),
             deviceType: template.deviceType,
+            operatingMode:
+              template.deviceType === "Router" ? "Router only" : undefined,
             connectionType: template.connectionType,
-            notes: template.notes,
+            notes: "",
             state: template.state || "Current",
+            lifecycle: template.state === "Future" ? "Planned" : "Active",
+            quantity: template.deviceType === "Camera group" ? 1 : undefined,
             status: template.status || "Needs Verification",
           }
         : base;
@@ -441,6 +565,11 @@ export function App() {
     const source = site.devices.find((device) => device.id === sourceId);
     if (!source) return;
     const horizontal = side === "after" ? 288 : -288,
+      affectedConnections = site.connections.filter((connection) =>
+        side === "after"
+          ? connection.source === source.id
+          : connection.target === source.id,
+      ),
       offsets = [0, 144, -144, 288, -288, 432, -432],
       occupied = (position: { x: number; y: number }) =>
         visibleSite.devices.some(
@@ -462,14 +591,23 @@ export function App() {
         break;
       }
     }
-    const device = {
+    if (affectedConnections.length)
+      position = {
+        x: source.position.x + horizontal,
+        y: source.position.y,
+      };
+    const device: NetworkDevice = {
         ...blankDevice(),
         position,
         hostname: defaultDeviceName(template, site.devices),
         deviceType: template.deviceType,
+        operatingMode:
+          template.deviceType === "Router" ? "Router only" : undefined,
         connectionType: template.connectionType,
-        notes: template.notes,
+        notes: "",
         state: template.state || "Current",
+        lifecycle: template.state === "Future" ? "Planned" : "Active",
+        quantity: template.deviceType === "Camera group" ? 1 : undefined,
         status: template.status || "Needs Verification",
       },
       connection: NetworkConnection = {
@@ -478,17 +616,53 @@ export function App() {
         target: side === "after" ? device.id : source.id,
         label: "",
         connectionType: "Ethernet",
-        status:
-          source.status === "Known" && device.status === "Known"
-            ? "Known"
-            : "Needs Verification",
+        status: connectionStatusFor(source, device, "Needs Verification"),
         state: "Current",
       };
-    updateSite((current) => ({
-      ...current,
-      devices: [...current.devices, device],
-      connections: [...current.connections, connection],
-    }));
+    updateSite((current) => {
+      const shiftedDevices = affectedConnections.length
+        ? current.devices.map((currentDevice) => {
+            const isBeyondSource =
+              side === "after"
+                ? currentDevice.position.x > source.position.x
+                : currentDevice.position.x < source.position.x;
+            return isBeyondSource
+              ? {
+                  ...currentDevice,
+                  position: {
+                    ...currentDevice.position,
+                    x: currentDevice.position.x + horizontal,
+                  },
+                }
+              : currentDevice;
+          })
+        : current.devices;
+      if (!affectedConnections.length)
+        return {
+          ...current,
+          devices: [...shiftedDevices, device],
+          connections: [...current.connections, connection],
+        };
+      const affectedIds = new Set(
+          affectedConnections.map((existing) => existing.id),
+        ),
+        rewired = affectedConnections.map((existing) => ({
+          ...existing,
+          source: side === "after" ? device.id : existing.source,
+          target: side === "after" ? existing.target : device.id,
+        }));
+      return {
+        ...current,
+        devices: [...shiftedDevices, device],
+        connections: [
+          ...current.connections.filter(
+            (existing) => !affectedIds.has(existing.id),
+          ),
+          connection,
+          ...rewired,
+        ],
+      };
+    });
     setPendingAttachment(null);
     setPaletteOpen(false);
     setSelection({ kind: "device", id: device.id });
@@ -504,10 +678,7 @@ export function App() {
       target: c.target,
       label: "",
       connectionType: "Ethernet",
-      status:
-        source?.status === "Known" && target?.status === "Known"
-          ? "Known"
-          : "Needs Verification",
+      status: connectionStatusFor(source, target, "Needs Verification"),
       state: "Current",
     });
     showNotice("Connection added");
@@ -566,7 +737,12 @@ export function App() {
     unknown = visibleSite.devices.filter(
       (d) => d.status === "Needs Verification",
     ).length,
-    planned = visibleSite.devices.filter((d) => d.status === "Planned").length;
+    planned = visibleSite.devices.filter(
+      (d) =>
+        d.lifecycle === "Planned" ||
+        d.status === "Planned" ||
+        d.state === "Future",
+    ).length;
   const isAdmin = user?.role === "admin",
     isPublished =
       publishedVersion === versionRef.current &&
@@ -618,9 +794,34 @@ export function App() {
           <span className="brand-mark">
             <img src="/statefile-mark.svg" alt="" />
           </span>
-          <div>
-            <b>Network Builder</b>
-            <small>Infrastructure source of truth</small>
+          <div className="brand-copy">
+            {page === "site" ? (
+              <input
+                className="flow-title-input"
+                aria-label="Location name"
+                value={site.name}
+                onChange={(event) =>
+                  updateSite((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                onBlur={() => {
+                  if (!site.name.trim())
+                    updateSite((current) => ({
+                      ...current,
+                      name: "Untitled network",
+                    }));
+                }}
+              />
+            ) : (
+              <b>Network Builder</b>
+            )}
+            <small>
+              {page === "site"
+                ? "Network topology"
+                : "Infrastructure source of truth"}
+            </small>
           </div>
         </div>
         <div className="header-navigation">
@@ -662,7 +863,7 @@ export function App() {
           {page === "site" && (
             <div className="publish-split">
               <button
-                className={`quiet ${isPublished ? "published-button" : ""}`}
+                className={`quiet ${isPublished ? "published-button" : "unpublished-button"}`}
                 disabled={
                   isPublished ||
                   publishing ||
@@ -802,6 +1003,7 @@ export function App() {
                     onConnectionClick={(id) =>
                       setSelection({ kind: "connection", id })
                     }
+                    onConnectionDelete={removeConnection}
                     onMoveMany={(positions) => {
                       const moved = new globalThis.Map(
                         positions.map((item) => [item.id, item.position]),
@@ -814,9 +1016,11 @@ export function App() {
                         })),
                       }));
                     }}
+                    onDragStateChange={setTopologyDragging}
                     onConnect={connect}
                     onQuickAdd={openAttachedDeviceMenu}
                     onAddAt={openDeviceMenu}
+                    onCleanUp={cleanUpTopology}
                   />
                 ) : (
                   <div className="empty-state">
@@ -861,7 +1065,10 @@ export function App() {
                     <Printer size={16} /> Print / save PDF
                   </button>
                 </div>
-                <ManagementReport site={visibleSite} />
+                <ManagementReport
+                  site={visibleSite}
+                  version={versionRef.current}
+                />
               </>
             )}
           </main>

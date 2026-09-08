@@ -2,7 +2,7 @@ import {
   useEffect,
   useRef,
   useState,
-  type MouseEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent,
 } from "react";
 import {
@@ -22,6 +22,7 @@ import {
   type Connection,
   type EdgeProps,
   type NodeProps,
+  type OnConnectEnd,
 } from "@xyflow/react";
 import {
   Cable,
@@ -32,15 +33,20 @@ import {
   Server,
   Shield,
   Users,
+  Video,
   Wifi,
   Plus,
+  WandSparkles,
+  Trash2,
 } from "lucide-react";
 import type {
+  DeviceLifecycle,
   NetworkConnection,
   NetworkDevice,
   TopologyEdge,
   TopologyNode,
 } from "../types";
+import { connectionStatusFor } from "../data/deviceStatus";
 import "./Topology.css";
 
 const iconFor = (type: string) => {
@@ -52,23 +58,50 @@ const iconFor = (type: string) => {
   if (t.includes("switch")) return Cable;
   if (t.includes("internet") || t.includes("vpn")) return Radio;
   if (t.includes("client")) return Users;
+  if (t.includes("camera") || t.includes("video recorder")) return Video;
   if (t.includes("server")) return Server;
   return CircleHelp;
 };
+const lifecycleFor = (device: NetworkDevice): DeviceLifecycle =>
+  device.lifecycle ??
+  (device.status === "Retired"
+    ? "Retired"
+    : device.status === "Planned" || device.state === "Future"
+      ? "Planned"
+      : "Active");
 
 type QuickAddData = NetworkDevice & {
   onQuickAdd: (id: string, side: "before" | "after") => void;
 };
 
 function DeviceNode({ data }: NodeProps<TopologyNode>) {
-  const Icon = iconFor(data.deviceType);
-  const description = [data.manufacturer, data.model]
+  const displayType =
+    data.operatingMode === "Access point only"
+      ? "Wireless access point"
+      : data.operatingMode === "Router + wireless access point"
+        ? "Router / wireless access point"
+        : data.deviceType;
+  const Icon = iconFor(displayType);
+  const description = [
+    data.quantity
+      ? `${data.quantity} ${data.quantity === 1 ? "camera" : "cameras"}`
+      : "",
+    data.manufacturer,
+    data.model,
+  ]
     .map((value) => value.trim())
     .filter(Boolean)
     .join(" ");
   const quickAdd = (data as QuickAddData).onQuickAdd;
+  const lifecycle = lifecycleFor(data);
+  const statusLabel =
+    data.status === "Needs Verification" ? "Verify" : data.status;
+  const stateLabel =
+    lifecycle.toLowerCase() === statusLabel.toLowerCase()
+      ? lifecycle
+      : `${lifecycle} · ${statusLabel}`;
   const pointerStart = useRef({ x: 0, y: 0 });
-  const clickHandle = (event: MouseEvent, side: "before" | "after") => {
+  const clickHandle = (event: ReactMouseEvent, side: "before" | "after") => {
     event.stopPropagation();
     const moved = Math.hypot(
       event.clientX - pointerStart.current.x,
@@ -81,7 +114,7 @@ function DeviceNode({ data }: NodeProps<TopologyNode>) {
   };
   return (
     <div
-      className={`network-node ${description ? "" : "node-compact"} status-${data.status.toLowerCase().replace(" ", "-")} state-${data.state.toLowerCase()}`}
+      className={`network-node ${description ? "" : "node-compact"} status-${data.status.toLowerCase().replace(" ", "-")} state-${data.state.toLowerCase()} lifecycle-${lifecycle.toLowerCase()}`}
     >
       <Handle
         type="target"
@@ -98,16 +131,13 @@ function DeviceNode({ data }: NodeProps<TopologyNode>) {
           </span>
           <div>
             <strong>{data.hostname}</strong>
-            <div className="node-type">{data.deviceType}</div>
+            <div className="node-type">{displayType}</div>
           </div>
         </div>
       </div>
       {description && <div className="node-meta">{description}</div>}
       <div className="node-footer">
-        <span className="node-status">
-          {data.state === "Future" ? "Future · " : ""}
-          {data.status}
-        </span>
+        <span className="node-status">{stateLabel}</span>
         <span>
           {data.managementIp || data.connectionType || "Details required"}
         </span>
@@ -137,6 +167,15 @@ function ConnectionEdge({
   style,
   data,
 }: EdgeProps<TopologyEdge>) {
+  const [showActions, setShowActions] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const show = () => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    setShowActions(true);
+  };
+  const hide = () => {
+    hideTimer.current = setTimeout(() => setShowActions(false), 120);
+  };
   const [path, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -148,15 +187,48 @@ function ConnectionEdge({
   return (
     <>
       <BaseEdge id={id} path={path} markerEnd={markerEnd} style={style} />
-      {data?.label && (
+      <path
+        d={path}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={22}
+        className="edge-hover-target"
+        onMouseEnter={show}
+        onMouseLeave={hide}
+      />
+      {(data?.label || showActions) && (
         <EdgeLabelRenderer>
           <div
-            className={`edge-label edge-label-${data.state.toLowerCase()}`}
+            className="edge-overlay"
             style={{
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
             }}
+            onMouseEnter={show}
+            onMouseLeave={hide}
           >
-            {data.label}
+            {data?.label && (
+              <span
+                className={`edge-label edge-label-${data.state.toLowerCase()}`}
+              >
+                {data.label}
+              </span>
+            )}
+            {showActions && (
+              <button
+                className="edge-delete"
+                title="Remove connection"
+                aria-label="Remove connection"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  const edgeData = data as NetworkConnection & {
+                    onDelete?: (connectionId: string) => void;
+                  };
+                  edgeData?.onDelete?.(id);
+                }}
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
           </div>
         </EdgeLabelRenderer>
       )}
@@ -169,22 +241,28 @@ interface Props {
   connections: NetworkConnection[];
   onDeviceClick: (id: string) => void;
   onConnectionClick: (id: string) => void;
+  onConnectionDelete: (id: string) => void;
   onMoveMany: (
     positions: { id: string; position: { x: number; y: number } }[],
   ) => void;
+  onDragStateChange: (dragging: boolean) => void;
   onConnect: (connection: Connection) => void;
   onQuickAdd: (id: string, side: "before" | "after") => void;
   onAddAt: (position: { x: number; y: number }) => void;
+  onCleanUp: () => void;
 }
 export function Topology({
   devices,
   connections,
   onDeviceClick,
   onConnectionClick,
+  onConnectionDelete,
   onMoveMany,
+  onDragStateChange,
   onConnect,
   onQuickAdd,
   onAddAt,
+  onCleanUp,
 }: Props) {
   const incomingNodes: TopologyNode[] = devices.map((d) => ({
     id: d.id,
@@ -208,7 +286,7 @@ export function Topology({
       incomingNodes.map((incoming) => {
         const existing = current.find((node) => node.id === incoming.id);
         return existing
-          ? { ...incoming, position: existing.position }
+          ? { ...incoming, selected: existing.selected }
           : incoming;
       }),
     );
@@ -224,16 +302,13 @@ export function Topology({
   const edges: TopologyEdge[] = connections.map((c) => {
     const source = devices.find((device) => device.id === c.source),
       target = devices.find((device) => device.id === c.target),
-      status =
-        source?.status === "Known" && target?.status === "Known"
-          ? "Known"
-          : c.status;
+      status = connectionStatusFor(source, target, c.status);
     return {
       id: c.id,
       source: c.source,
       target: c.target,
       type: "networkConnection",
-      data: { ...c, status },
+      data: { ...c, status, onDelete: onConnectionDelete },
       animated: c.state === "Future",
       markerEnd: { type: MarkerType.ArrowClosed },
       className: `edge-${c.state.toLowerCase()} edge-${status.toLowerCase().replace(" ", "-")}`,
@@ -249,6 +324,24 @@ export function Topology({
       },
     };
   });
+  const connectEnd: OnConnectEnd = (event, connectionState) => {
+    if (connectionState.toHandle || !connectionState.fromNode) return;
+    const point = "changedTouches" in event ? event.changedTouches[0] : event;
+    if (!point) return;
+    const targetElement = document
+        .elementFromPoint(point.clientX, point.clientY)
+        ?.closest<HTMLElement>(".react-flow__node"),
+      targetNodeId = targetElement?.dataset.id,
+      sourceNodeId = connectionState.fromNode.id;
+    if (!targetNodeId || targetNodeId === sourceNodeId) return;
+    const startedFromTarget = connectionState.fromHandle?.type === "target";
+    onConnect({
+      source: startedFromTarget ? targetNodeId : sourceNodeId,
+      target: startedFromTarget ? sourceNodeId : targetNodeId,
+      sourceHandle: null,
+      targetHandle: null,
+    });
+  };
   return (
     <div className="topology-canvas">
       <ReactFlow
@@ -268,6 +361,7 @@ export function Topology({
         selectionKeyCode="Shift"
         panOnDrag
         onConnect={onConnect}
+        onConnectEnd={connectEnd}
         onInit={setInstance}
         onPaneClick={() => setContextMenu(null)}
         onPaneContextMenu={(event) => {
@@ -278,7 +372,7 @@ export function Topology({
           ).getBoundingClientRect();
           setContextMenu({
             left: Math.min(event.clientX - bounds.left, bounds.width - 180),
-            top: Math.min(event.clientY - bounds.top, bounds.height - 48),
+            top: Math.min(event.clientY - bounds.top, bounds.height - 88),
             position: instance.screenToFlowPosition({
               x: event.clientX,
               y: event.clientY,
@@ -287,14 +381,16 @@ export function Topology({
         }}
         onNodeClick={(_, n) => onDeviceClick(n.id)}
         onEdgeClick={(_, e) => onConnectionClick(e.id)}
-        onNodeDragStop={(_, node, draggedNodes) =>
+        onNodeDragStart={() => onDragStateChange(true)}
+        onNodeDragStop={(_, node, draggedNodes) => {
           onMoveMany(
             (draggedNodes.length ? draggedNodes : [node]).map((item) => ({
               id: item.id,
               position: item.position,
             })),
-          )
-        }
+          );
+          onDragStateChange(false);
+        }}
         colorMode="dark"
       >
         <Background color="#24271f" gap={24} />
@@ -326,6 +422,15 @@ export function Topology({
             }}
           >
             <Plus size={15} /> Add device here
+          </button>
+          <button
+            role="menuitem"
+            onClick={() => {
+              onCleanUp();
+              setContextMenu(null);
+            }}
+          >
+            <WandSparkles size={15} /> Clean up layout
           </button>
         </div>
       )}

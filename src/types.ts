@@ -7,6 +7,17 @@ export type RecordStatus =
   | "Compromised"
   | "Removed";
 export type InfrastructureState = "Current" | "Future";
+export type DeviceOperatingMode =
+  | "Router only"
+  | "Router + wireless access point"
+  | "Access point only";
+export type DeviceLifecycle =
+  | "Active"
+  | "Standby"
+  | "Legacy"
+  | "Disconnected"
+  | "Planned"
+  | "Retired";
 export interface NetworkDevice extends Record<string, unknown> {
   id: string;
   hostname: string;
@@ -14,6 +25,8 @@ export interface NetworkDevice extends Record<string, unknown> {
   manufacturer: string;
   model: string;
   wirelessNetworks?: string;
+  operatingMode?: DeviceOperatingMode;
+  quantity?: number;
   managementIp: string;
   subnetVlan: string;
   macAddress: string;
@@ -25,6 +38,7 @@ export interface NetworkDevice extends Record<string, unknown> {
   lastVerified: string;
   status: RecordStatus;
   state: InfrastructureState;
+  lifecycle?: DeviceLifecycle;
   position: XYPosition;
   removedAt?: string;
 }

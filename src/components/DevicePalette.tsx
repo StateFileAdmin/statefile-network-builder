@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  Box,
   Cable,
   Cloud,
   EthernetPort,
@@ -12,6 +13,7 @@ import {
   Search,
   Server,
   Shield,
+  Users,
   Video,
   Wifi,
   X,
@@ -24,6 +26,7 @@ export interface DeviceTemplate {
   deviceType: string;
   connectionType: string;
   notes: string;
+  searchTerms?: string;
   state?: InfrastructureState;
   status?: RecordStatus;
   icon: LucideIcon;
@@ -40,18 +43,38 @@ const templates: DeviceTemplate[] = [
     group: "Network edge",
   },
   {
-    name: "Router",
+    name: "NBN connection box / NTD",
+    deviceType: "NBN connection box / NTD",
+    connectionType: "NBN / Ethernet",
+    notes:
+      "Record the NBN technology, connection-box model, serial number, active UNI-D port and physical location.",
+    icon: Box,
+    group: "Network edge",
+  },
+  {
+    name: "Router / WAP",
     deviceType: "Router",
+    searchTerms: "wireless router WAP AP access point",
     connectionType: "WAN / Ethernet",
     notes: "Record gateway, DHCP, DNS, firmware and routing configuration.",
     icon: Router,
     group: "Network edge",
   },
   {
-    name: "Firewall",
-    deviceType: "Firewall",
+    name: "Router / security gateway",
+    deviceType: "Router / security gateway",
     connectionType: "WAN / Ethernet / VPN",
-    notes: "Record security services, policies, logging and VPN capability.",
+    notes:
+      "For one appliance that provides routing, NAT, firewall and VPN functions, such as a TP-Link Omada ER605.",
+    icon: Router,
+    group: "Network edge",
+  },
+  {
+    name: "Firewall / NGFW",
+    deviceType: "Firewall / NGFW",
+    connectionType: "WAN / Ethernet / VPN",
+    notes:
+      "For a dedicated firewall or next-generation firewall appliance. Record security services, policies, logging and VPN capability.",
     icon: Shield,
     group: "Network edge",
   },
@@ -100,6 +123,7 @@ const templates: DeviceTemplate[] = [
   {
     name: "Wireless access point",
     deviceType: "Wireless access point",
+    searchTerms: "WAP AP EAP Wi-Fi wireless AP",
     connectionType: "Ethernet / PoE / Wi-Fi",
     notes:
       "Record SSIDs, security mode, channel plan, controller and switch port.",
@@ -124,11 +148,29 @@ const templates: DeviceTemplate[] = [
     group: "Services",
   },
   {
+    name: "Network video recorder (NVR)",
+    deviceType: "Network video recorder",
+    connectionType: "Ethernet / PoE",
+    notes:
+      "Record recorder model, storage capacity, camera network, switch connection and retention period.",
+    icon: Video,
+    group: "Services",
+  },
+  {
     name: "Network printer",
     deviceType: "Printer",
     connectionType: "Ethernet / Wi-Fi",
     notes: "Record static or reserved IP, location, model and print queue.",
     icon: Printer,
+    group: "Endpoints",
+  },
+  {
+    name: "End-user devices",
+    deviceType: "Client group",
+    connectionType: "Ethernet / Wi-Fi",
+    notes:
+      "Use as a single summary node for all user computers, phones and tablets when individual endpoint records are unnecessary.",
+    icon: Users,
     group: "Endpoints",
   },
   {
@@ -158,6 +200,15 @@ const templates: DeviceTemplate[] = [
     group: "Endpoints",
   },
   {
+    name: "All cameras",
+    deviceType: "Camera group",
+    connectionType: "Ethernet / PoE / Wi-Fi",
+    notes:
+      "Use as a summary node when individual camera records are unnecessary. Record the total camera count.",
+    icon: Video,
+    group: "Endpoints",
+  },
+  {
     name: "IoT / building device",
     deviceType: "IoT device",
     connectionType: "Ethernet / Wi-Fi",
@@ -177,7 +228,7 @@ export function DevicePalette({
   const results = useMemo(
     () =>
       templates.filter((t) =>
-        `${t.name} ${t.deviceType} ${t.group}`
+        `${t.name} ${t.deviceType} ${t.group} ${t.searchTerms ?? ""}`
           .toLowerCase()
           .includes(query.toLowerCase()),
       ),

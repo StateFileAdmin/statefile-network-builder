@@ -20,6 +20,28 @@ body {
   background: var(--bg);
   letter-spacing: -0.008em;
 }
+.brand-copy {
+  min-width: 0;
+}
+.flow-title-input {
+  width: min(250px, 24vw);
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+}
+.flow-title-input:hover {
+  border-color: var(--line-strong);
+  background: var(--panel-2);
+}
+.flow-title-input:focus {
+  border-color: var(--blue);
+  background: var(--panel-2);
+  outline: 0;
+}
 .select-trigger,
 .select-menu {
   border-radius: 4px;
@@ -39,6 +61,19 @@ body {
   padding: 0;
   border-left: 0;
   border-radius: 0 6px 6px 0;
+}
+.header-actions .unpublished-button {
+  border-color: var(--amber);
+  background: var(--amber);
+  color: #17150d;
+  font-weight: 700;
+}
+.header-actions .unpublished-button:hover:not(:disabled) {
+  border-color: #ffd45d;
+  background: #ffd45d;
+}
+.header-actions .unpublished-button:disabled {
+  opacity: 0.72;
 }
 .header-actions .account-button {
   width: 36px;
@@ -146,6 +181,17 @@ body {
 }
 .editor-section > label textarea {
   width: 100%;
+  min-height: 96px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  outline: 0;
+  background: #0b0c0a;
+  color: var(--text);
+  resize: vertical;
+}
+.editor-section > label textarea::placeholder {
+  color: var(--muted);
 }
 .editor-details-toggle {
   width: 100%;
@@ -261,6 +307,17 @@ button.primary:hover {
 .network-node.status-planned,
 .network-node.status-retired {
   border-color: rgba(61, 117, 237, 0.7);
+}
+.network-node.lifecycle-standby,
+.network-node.lifecycle-legacy,
+.network-node.lifecycle-planned,
+.network-node.lifecycle-retired {
+  border-color: rgba(61, 117, 237, 0.7);
+}
+.network-node.lifecycle-disconnected {
+  opacity: 0.68;
+  border-color: rgba(154, 156, 163, 0.65);
+  border-style: dashed;
 }
 .network-node.status-compromised,
 .network-node.status-removed {

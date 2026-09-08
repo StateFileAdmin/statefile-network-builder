@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, ChevronDown, Trash2, X } from "lucide-react";
-import type { NetworkConnection, NetworkDevice, RecordStatus } from "../types";
+import type {
+  DeviceLifecycle,
+  DeviceOperatingMode,
+  NetworkConnection,
+  NetworkDevice,
+  RecordStatus,
+} from "../types";
 import { CustomSelect, DatePicker } from "./FormControls";
 
 const statuses: RecordStatus[] = [
@@ -15,6 +21,26 @@ const stateOptions = [
   { value: "Current", label: "Current" },
   { value: "Future", label: "Future" },
 ];
+const lifecycleOptions: DeviceLifecycle[] = [
+  "Active",
+  "Standby",
+  "Legacy",
+  "Disconnected",
+  "Planned",
+  "Retired",
+];
+const operatingModeOptions: DeviceOperatingMode[] = [
+  "Router only",
+  "Router + wireless access point",
+  "Access point only",
+];
+const deviceLifecycle = (device: NetworkDevice): DeviceLifecycle =>
+  device.lifecycle ??
+  (device.status === "Retired"
+    ? "Retired"
+    : device.status === "Planned" || device.state === "Future"
+      ? "Planned"
+      : "Active");
 
 interface DeviceProps {
   kind: "device";
@@ -100,7 +126,48 @@ function DeviceForm({ value, onSave }: DeviceProps) {
             <span>Device type</span>
             <strong>{draft.deviceType}</strong>
           </div>
-          {draft.deviceType.toLowerCase().includes("wireless access point") && (
+          {draft.deviceType === "Router" && (
+            <label className="span-2">
+              <span>Operating mode</span>
+              <CustomSelect
+                label="Router operating mode"
+                value={draft.operatingMode ?? "Router only"}
+                options={operatingModeOptions.map((value) => ({
+                  value,
+                  label: value,
+                }))}
+                onChange={(operatingMode) =>
+                  change({
+                    ...draft,
+                    operatingMode: operatingMode as DeviceOperatingMode,
+                  })
+                }
+              />
+            </label>
+          )}
+          {draft.deviceType === "Camera group" && (
+            <label className="span-2">
+              <span>Number of cameras</span>
+              <input
+                type="number"
+                min={1}
+                max={10000}
+                value={draft.quantity ?? 1}
+                onChange={(event) =>
+                  change({
+                    ...draft,
+                    quantity: Math.max(
+                      1,
+                      Math.min(10000, Number(event.target.value) || 1),
+                    ),
+                  })
+                }
+              />
+            </label>
+          )}
+          {(draft.deviceType.toLowerCase().includes("wireless access point") ||
+            draft.operatingMode === "Router + wireless access point" ||
+            draft.operatingMode === "Access point only") && (
             <label className="span-2">
               <span>Network names (SSIDs)</span>
               <textarea
@@ -114,9 +181,9 @@ function DeviceForm({ value, onSave }: DeviceProps) {
             </label>
           )}
           <label>
-            <span>Status</span>
+            <span>Verification / condition</span>
             <CustomSelect
-              label="Device status"
+              label="Device verification or condition"
               value={draft.status}
               options={statusOptions}
               onChange={(status) =>
@@ -125,14 +192,22 @@ function DeviceForm({ value, onSave }: DeviceProps) {
             />
           </label>
           <label>
-            <span>State</span>
+            <span>Lifecycle</span>
             <CustomSelect
-              label="Infrastructure state"
-              value={draft.state}
-              options={stateOptions}
-              onChange={(state) =>
-                change({ ...draft, state: state as "Current" | "Future" })
-              }
+              label="Device lifecycle"
+              value={deviceLifecycle(draft)}
+              options={lifecycleOptions.map((value) => ({
+                value,
+                label: value,
+              }))}
+              onChange={(value) => {
+                const lifecycle = value as DeviceLifecycle;
+                change({
+                  ...draft,
+                  lifecycle,
+                  state: lifecycle === "Planned" ? "Future" : "Current",
+                });
+              }}
             />
           </label>
           {input("manufacturer", "Manufacturer")}

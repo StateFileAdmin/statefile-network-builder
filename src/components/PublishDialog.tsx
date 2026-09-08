@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { History, RotateCcw, X } from "lucide-react";
+import { ArrowLeft, Eye, History, RotateCcw, X } from "lucide-react";
 import type { Site } from "../types";
 import { authenticatedFetch } from "../data/storage";
 import { ActionDialog, type ActionDialogRequest } from "./ActionDialog";
@@ -12,6 +12,8 @@ interface Publication {
   published_at: string;
   published_by: string;
 }
+
+type PublicationPreview = Publication & { site: Site };
 
 export function PublicationHistoryDialog({
   site,
@@ -27,6 +29,7 @@ export function PublicationHistoryDialog({
   const [items, setItems] = useState<Publication[]>([]),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
+    [preview, setPreview] = useState<PublicationPreview | null>(null),
     [actionDialog, setActionDialog] = useState<ActionDialogRequest | null>(
       null,
     );
@@ -67,6 +70,26 @@ export function PublicationHistoryDialog({
       setBusy(false);
     }
   };
+  const view = async (item: Publication) => {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await authenticatedFetch(`/api/publications/${item.id}`),
+        data = (await response.json()) as {
+          publication?: PublicationPreview;
+          error?: string;
+        };
+      if (!response.ok || !data.publication)
+        throw new Error(data.error || "Could not load this publication.");
+      setPreview(data.publication);
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not load preview.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <div
       className="modal-backdrop"
@@ -93,7 +116,71 @@ export function PublicationHistoryDialog({
           <h3>
             <History size={16} /> Publication history
           </h3>
-          {items.length ? (
+          {preview ? (
+            <div className="publication-preview">
+              <div className="publication-preview-heading">
+                <button className="quiet" onClick={() => setPreview(null)}>
+                  <ArrowLeft size={14} /> Back
+                </button>
+                <div>
+                  <b>Version {preview.register_version}</b>
+                  <span>
+                    {new Date(preview.published_at).toLocaleString("en-AU")}
+                  </span>
+                </div>
+              </div>
+              <div className="publication-preview-metrics">
+                <span>
+                  <b>{preview.site.devices.length}</b> Devices
+                </span>
+                <span>
+                  <b>{preview.site.connections.length}</b> Connections
+                </span>
+                <span>
+                  <b>{preview.site.ipPlan.length}</b> IP networks
+                </span>
+              </div>
+              <section>
+                <h4>Devices</h4>
+                <div className="publication-preview-list">
+                  {preview.site.devices.map((device) => (
+                    <div key={device.id}>
+                      <b>{device.hostname}</b>
+                      <span>
+                        {device.deviceType} · {device.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+              <section>
+                <h4>Connections</h4>
+                <div className="publication-preview-list">
+                  {preview.site.connections.map((connection) => {
+                    const names = Object.fromEntries(
+                      preview.site.devices.map((device) => [
+                        device.id,
+                        device.hostname,
+                      ]),
+                    );
+                    return (
+                      <div key={connection.id}>
+                        <b>
+                          {names[connection.source] || "Unknown"} →{" "}
+                          {names[connection.target] || "Unknown"}
+                        </b>
+                        <span>
+                          {connection.label ||
+                            connection.connectionType ||
+                            "Unlabelled connection"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
+          ) : items.length ? (
             items.map((item) => (
               <article key={item.id}>
                 <div>
@@ -104,22 +191,31 @@ export function PublicationHistoryDialog({
                   </span>
                   <p>{item.release_note || "No release note."}</p>
                 </div>
-                {canRestore && (
+                <div className="publication-actions">
                   <button
                     className="quiet"
                     disabled={busy}
-                    onClick={() =>
-                      setActionDialog({
-                        title: `Restore version ${item.register_version}?`,
-                        message: `This replaces the current ${site.name} draft with the version published on ${new Date(item.published_at).toLocaleString("en-AU")}. Publication history remains available.`,
-                        confirmLabel: "Restore version",
-                        onConfirm: () => restore(item),
-                      })
-                    }
+                    onClick={() => void view(item)}
                   >
-                    <RotateCcw size={14} /> Restore
+                    <Eye size={14} /> View
                   </button>
-                )}
+                  {canRestore && (
+                    <button
+                      className="quiet"
+                      disabled={busy}
+                      onClick={() =>
+                        setActionDialog({
+                          title: `Restore version ${item.register_version}?`,
+                          message: `This replaces the current ${site.name} draft with the version published on ${new Date(item.published_at).toLocaleString("en-AU")}. Publication history remains available.`,
+                          confirmLabel: "Restore version",
+                          onConfirm: () => restore(item),
+                        })
+                      }
+                    >
+                      <RotateCcw size={14} /> Restore
+                    </button>
+                  )}
+                </div>
               </article>
             ))
           ) : (
