@@ -12,6 +12,7 @@ import {
   Network,
   Plus,
   Printer,
+  Settings,
   UserRound,
   Upload,
   UploadCloud,
@@ -25,6 +26,7 @@ import { Dashboard } from "./components/Dashboard";
 import { CustomSelect } from "./components/FormControls";
 import { AccountPanel, type CurrentUser } from "./components/AccountPanel";
 import { PublicationHistoryDialog } from "./components/PublishDialog";
+import { LocationSettings } from "./components/LocationSettings";
 import {
   ActionDialog,
   type ActionDialogRequest,
@@ -43,6 +45,7 @@ import {
 } from "./data/storage";
 import { MAX_REGISTER_BYTES } from "./data/validation";
 import { connectionStatusFor } from "./data/deviceStatus";
+import { hasRoutingUpstream } from "./data/topologyChecks";
 import type {
   NetworkConnection,
   NetworkDevice,
@@ -61,6 +64,9 @@ const blankDevice = (): NetworkDevice => ({
   deviceType: "Network device",
   manufacturer: "",
   model: "",
+  serviceProvider: "",
+  serviceType: "",
+  serviceReference: "",
   wirelessNetworks: "",
   managementIp: "",
   subnetVlan: "",
@@ -115,15 +121,36 @@ const normaliseDeviceTypes = (register: NetworkRegister) => {
             ? legacyCombinedRouter
               ? "Router + wireless access point"
               : "Router only"
-            : undefined);
+            : undefined),
+        isInternetService = normalisedType === "Internet service",
+        serviceProvider = isInternetService
+          ? device.serviceProvider?.trim() || device.manufacturer
+          : device.serviceProvider,
+        serviceType = isInternetService
+          ? device.serviceType?.trim() || device.model
+          : device.serviceType,
+        needsServiceMigration =
+          isInternetService &&
+          (serviceProvider !== device.serviceProvider ||
+            serviceType !== device.serviceType ||
+            Boolean(device.manufacturer || device.model));
       if (
         !legacyType &&
         !legacyCombinedRouter &&
-        operatingMode === device.operatingMode
+        operatingMode === device.operatingMode &&
+        !needsServiceMigration
       )
         return device;
       changed = true;
-      return { ...device, deviceType: normalisedType, operatingMode };
+      return {
+        ...device,
+        deviceType: normalisedType,
+        operatingMode,
+        serviceProvider,
+        serviceType,
+        manufacturer: isInternetService ? "" : device.manufacturer,
+        model: isInternetService ? "" : device.model,
+      };
     }),
   }));
   const normalisedSites = sites.map((site) => ({
@@ -190,6 +217,7 @@ export function App() {
     [sync, setSync] = useState<SyncState>("idle"),
     [user, setUser] = useState<CurrentUser | null>(null),
     [accountOpen, setAccountOpen] = useState(false),
+    [locationSettingsOpen, setLocationSettingsOpen] = useState(false),
     [historyOpen, setHistoryOpen] = useState(false),
     [topologyDragging, setTopologyDragging] = useState(false),
     [publishing, setPublishing] = useState(false),
@@ -800,6 +828,7 @@ export function App() {
                 className="flow-title-input"
                 aria-label="Location name"
                 value={site.name}
+                size={Math.min(24, Math.max(8, site.name.length || 1))}
                 onChange={(event) =>
                   updateSite((current) => ({
                     ...current,
@@ -914,6 +943,16 @@ export function App() {
           <button className="primary" onClick={generateReport}>
             <Printer size={16} /> Generate report
           </button>
+          {page === "site" && (
+            <button
+              className="icon-button account-button"
+              title="Location settings"
+              aria-label="Open location settings"
+              onClick={() => setLocationSettingsOpen(true)}
+            >
+              <Settings size={19} />
+            </button>
+          )}
           {isCloudMode && (
             <button
               className="icon-button account-button"
@@ -1078,6 +1117,11 @@ export function App() {
         <Drawer
           kind="device"
           value={selectedDevice}
+          routingWarning={hasRoutingUpstream(
+            selectedDevice.id,
+            site.devices,
+            site.connections,
+          )}
           onSave={saveDevice}
           onDelete={isAdmin ? () => removeDevice(selectedDevice.id) : undefined}
           onClose={() => setSelection(null)}
@@ -1124,6 +1168,17 @@ export function App() {
           user={user}
           sites={register.sites}
           onClose={() => setAccountOpen(false)}
+        />
+      )}{" "}
+      {locationSettingsOpen && page === "site" && (
+        <LocationSettings
+          name={site.name}
+          address={site.address}
+          description={site.description}
+          onChange={(change) =>
+            updateSite((current) => ({ ...current, ...change }))
+          }
+          onClose={() => setLocationSettingsOpen(false)}
         />
       )}{" "}
       {actionDialog && (

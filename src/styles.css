@@ -359,6 +359,15 @@ button.danger {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.node-routing-warning {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 7px;
+  color: #fbbf24;
+  font-size: 9px;
+  font-weight: 700;
+}
 .react-flow__handle {
   width: 8px !important;
   height: 8px !important;

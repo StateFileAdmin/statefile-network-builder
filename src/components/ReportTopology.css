@@ -35,6 +35,10 @@
 .report-connections .report-connection-needs-verification path {
   stroke: #fbbf24;
 }
+.report-connections .report-connection-disconnected path {
+  stroke: #9a9ca3;
+  stroke-dasharray: 7 5;
+}
 .report-connections .report-connection-compromised path,
 .report-connections .report-connection-removed path {
   stroke: #f87171;
@@ -117,6 +121,9 @@
 }
 .report-diagram-legend i.unverified {
   background: #fbbf24;
+}
+.report-diagram-legend i.disconnected {
+  background: #9a9ca3;
 }
 .report-diagram-legend i.danger {
   background: #f87171;

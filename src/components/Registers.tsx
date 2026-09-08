@@ -48,7 +48,7 @@ export function AssetRegister({
             <tr>
               <th>Hostname</th>
               <th>Type</th>
-              <th>Manufacturer / model</th>
+              <th>Device / service details</th>
               <th>Management IP</th>
               <th>Subnet / VLAN</th>
               <th>Location</th>
@@ -75,8 +75,20 @@ export function AssetRegister({
                   </td>
                   <td>{d.deviceType}</td>
                   <td>
-                    {[d.manufacturer, d.model].filter(Boolean).join(" · ") ||
-                      "—"}
+                    {d.deviceType === "Internet service"
+                      ? [d.serviceProvider, d.serviceType]
+                          .filter(Boolean)
+                          .join(" · ") || "—"
+                      : [
+                            "Client group",
+                            "Camera group",
+                            "Ethernet outlet",
+                            "VPN service",
+                          ].includes(d.deviceType)
+                        ? "Not applicable"
+                        : [d.manufacturer, d.model]
+                            .filter(Boolean)
+                            .join(" · ") || "—"}
                   </td>
                   <td>{d.managementIp || "—"}</td>
                   <td>{d.subnetVlan || "—"}</td>

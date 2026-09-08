@@ -24,6 +24,9 @@ export interface NetworkDevice extends Record<string, unknown> {
   deviceType: string;
   manufacturer: string;
   model: string;
+  serviceProvider?: string;
+  serviceType?: string;
+  serviceReference?: string;
   wirelessNetworks?: string;
   operatingMode?: DeviceOperatingMode;
   quantity?: number;

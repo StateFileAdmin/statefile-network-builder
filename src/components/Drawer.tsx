@@ -8,6 +8,7 @@ import type {
   RecordStatus,
 } from "../types";
 import { CustomSelect, DatePicker } from "./FormControls";
+import { deviceFieldProfile } from "../data/deviceFields";
 
 const statuses: RecordStatus[] = [
   "Known",
@@ -46,6 +47,7 @@ interface DeviceProps {
   kind: "device";
   value: NetworkDevice;
   onSave: (value: NetworkDevice) => void;
+  routingWarning?: boolean;
   onDelete?: () => void;
   onClose: () => void;
 }
@@ -98,10 +100,18 @@ export function Drawer(props: DeviceProps | ConnectionProps) {
   );
 }
 
-function DeviceForm({ value, onSave }: DeviceProps) {
+function DeviceForm({ value, onSave, routingWarning }: DeviceProps) {
   const [draft, setDraft] = useState(value),
     [detailsOpen, setDetailsOpen] = useState(false);
   useEffect(() => setDraft(value), [value]);
+  const profile = deviceFieldProfile(draft.deviceType);
+  const portLabel =
+    draft.deviceType === "NBN connection box / NTD"
+      ? "Active UNI-D / connected port"
+      : draft.deviceType === "Patch panel" ||
+          draft.deviceType === "Ethernet outlet"
+        ? "Port / destination mapping"
+        : "Switch / panel port";
   const change = (next: NetworkDevice) => {
     setDraft(next);
     onSave(next);
@@ -110,7 +120,7 @@ function DeviceForm({ value, onSave }: DeviceProps) {
     <label className={wide ? "span-2" : ""}>
       <span>{label}</span>
       <input
-        value={String(draft[key])}
+        value={String(draft[key] ?? "")}
         onChange={(event) => change({ ...draft, [key]: event.target.value })}
       />
     </label>
@@ -118,6 +128,24 @@ function DeviceForm({ value, onSave }: DeviceProps) {
   return (
     <form className="editor-form" onSubmit={(event) => event.preventDefault()}>
       <SensitiveDataNotice />
+      {routingWarning && draft.operatingMode !== "Access point only" && (
+        <div className="routing-setup-warning">
+          <AlertTriangle size={16} />
+          <span>
+            <strong>Set this to WAP only?</strong>
+            Another router, firewall or security gateway is connected before it.
+            Routing here may create double NAT.
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              change({ ...draft, operatingMode: "Access point only" })
+            }
+          >
+            Set to WAP only
+          </button>
+        </div>
+      )}
       <section className="editor-section">
         <h3>Device</h3>
         <div className="form-grid">
@@ -210,10 +238,16 @@ function DeviceForm({ value, onSave }: DeviceProps) {
               }}
             />
           </label>
-          {input("manufacturer", "Manufacturer")}
-          {input("model", "Model")}
-          {input("physicalLocation", "Physical location", true)}
-          {input("connectionType", "Connection type", true)}
+          {profile.service && input("serviceProvider", "Provider")}
+          {profile.service && input("serviceType", "Service type")}
+          {profile.service &&
+            input("serviceReference", "Account / circuit reference", true)}
+          {profile.manufacturerModel && input("manufacturer", "Manufacturer")}
+          {profile.manufacturerModel && input("model", "Model")}
+          {profile.physicalLocation &&
+            input("physicalLocation", "Physical location", true)}
+          {profile.connectionType &&
+            input("connectionType", "Connection type", true)}
         </div>
       </section>
       <button
@@ -227,11 +261,11 @@ function DeviceForm({ value, onSave }: DeviceProps) {
       {detailsOpen && (
         <section className="editor-section editor-secondary">
           <div className="form-grid">
-            {input("managementIp", "Management IP")}
-            {input("subnetVlan", "Subnet / VLAN")}
-            {input("switchPort", "Switch / panel port")}
-            {input("macAddress", "MAC address")}
-            {input("serialNumber", "Serial number")}
+            {profile.managementIp && input("managementIp", "Management IP")}
+            {profile.subnetVlan && input("subnetVlan", "Subnet / VLAN")}
+            {profile.switchPort && input("switchPort", portLabel)}
+            {profile.macAddress && input("macAddress", "MAC address")}
+            {profile.serialNumber && input("serialNumber", "Serial number")}
             <label>
               <span>Last verified</span>
               <DatePicker

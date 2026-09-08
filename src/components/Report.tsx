@@ -1,5 +1,9 @@
 import type { Site } from "../types";
-import { connectionStatusFor, deviceIsRetired } from "../data/deviceStatus";
+import {
+  connectionIsDisconnected,
+  connectionStatusFor,
+  deviceIsRetired,
+} from "../data/deviceStatus";
 import { StatusBadge } from "./Registers";
 import "./ReportTopology.css";
 const clip = (value: string, length = 28) =>
@@ -73,6 +77,10 @@ function ReportTopology({ site }: { site: Site }) {
                 targetDevice,
                 c.status,
               ),
+              disconnected = connectionIsDisconnected(
+                sourceDevice,
+                targetDevice,
+              ),
               sx = source.x + nodeWidth,
               sy = source.y + nodeHeight / 2,
               tx = target.x,
@@ -86,7 +94,7 @@ function ReportTopology({ site }: { site: Site }) {
             return (
               <g
                 key={c.id}
-                className={`${c.state === "Future" ? "report-connection-future" : ""} report-connection-${effectiveStatus.toLowerCase().replaceAll(" ", "-")}`}
+                className={`${c.state === "Future" ? "report-connection-future" : ""} report-connection-${effectiveStatus.toLowerCase().replaceAll(" ", "-")}${disconnected ? " report-connection-disconnected" : ""}`}
               >
                 <path
                   d={`M ${sx} ${sy} C ${mx} ${sy}, ${mx} ${ty}, ${tx} ${ty}`}
@@ -126,7 +134,13 @@ function ReportTopology({ site }: { site: Site }) {
                   {clip(
                     d.quantity
                       ? `${d.quantity} ${d.quantity === 1 ? "camera" : "cameras"}`
-                      : [d.manufacturer, d.model].filter(Boolean).join(" · ") ||
+                      : d.deviceType === "Internet service"
+                        ? [d.serviceProvider, d.serviceType]
+                            .filter(Boolean)
+                            .join(" · ") || "Service details required"
+                        : [d.manufacturer, d.model]
+                            .filter(Boolean)
+                            .join(" · ") ||
                           d.connectionType ||
                           "Details required",
                     36,
@@ -153,6 +167,10 @@ function ReportTopology({ site }: { site: Site }) {
         <span>
           <i className="future" />
           Planned / retired
+        </span>
+        <span>
+          <i className="disconnected" />
+          Disconnected
         </span>
         <span>
           <i className="unverified" />
@@ -248,10 +266,19 @@ export function ManagementReport({
                 <td>{d.hostname}</td>
                 <td>{displayDeviceType(d)}</td>
                 <td>
-                  {d.deviceType === "Client group"
-                    ? "Not applicable"
-                    : [d.manufacturer, d.model].filter(Boolean).join(" · ") ||
-                      "Not recorded"}
+                  {d.deviceType === "Internet service"
+                    ? [d.serviceProvider, d.serviceType]
+                        .filter(Boolean)
+                        .join(" · ") || "Not recorded"
+                    : [
+                          "Client group",
+                          "Camera group",
+                          "Ethernet outlet",
+                          "VPN service",
+                        ].includes(d.deviceType)
+                      ? "Not applicable"
+                      : [d.manufacturer, d.model].filter(Boolean).join(" · ") ||
+                        "Not recorded"}
                 </td>
                 <td>{d.physicalLocation || "Not recorded"}</td>
                 <td>

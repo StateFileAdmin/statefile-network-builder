@@ -26,6 +26,7 @@ import {
 } from "@xyflow/react";
 import {
   Cable,
+  AlertTriangle,
   CircleHelp,
   EthernetPort,
   Radio,
@@ -46,7 +47,11 @@ import type {
   TopologyEdge,
   TopologyNode,
 } from "../types";
-import { connectionStatusFor } from "../data/deviceStatus";
+import {
+  connectionIsDisconnected,
+  connectionStatusFor,
+} from "../data/deviceStatus";
+import { hasRoutingUpstream } from "../data/topologyChecks";
 import "./Topology.css";
 
 const iconFor = (type: string) => {
@@ -72,6 +77,7 @@ const lifecycleFor = (device: NetworkDevice): DeviceLifecycle =>
 
 type QuickAddData = NetworkDevice & {
   onQuickAdd: (id: string, side: "before" | "after") => void;
+  routingWarning: boolean;
 };
 
 function DeviceNode({ data }: NodeProps<TopologyNode>) {
@@ -83,16 +89,19 @@ function DeviceNode({ data }: NodeProps<TopologyNode>) {
         : data.deviceType;
   const Icon = iconFor(displayType);
   const description = [
-    data.quantity
-      ? `${data.quantity} ${data.quantity === 1 ? "camera" : "cameras"}`
-      : "",
-    data.manufacturer,
-    data.model,
+    data.deviceType === "Internet service"
+      ? [data.serviceProvider, data.serviceType].filter(Boolean).join(" — ")
+      : data.quantity
+        ? `${data.quantity} ${data.quantity === 1 ? "camera" : "cameras"}`
+        : "",
+    data.deviceType === "Internet service" ? "" : data.manufacturer,
+    data.deviceType === "Internet service" ? "" : data.model,
   ]
-    .map((value) => value.trim())
+    .map((value) => value?.trim() ?? "")
     .filter(Boolean)
     .join(" ");
   const quickAdd = (data as QuickAddData).onQuickAdd;
+  const routingWarning = (data as QuickAddData).routingWarning;
   const lifecycle = lifecycleFor(data);
   const statusLabel =
     data.status === "Needs Verification" ? "Verify" : data.status;
@@ -136,6 +145,11 @@ function DeviceNode({ data }: NodeProps<TopologyNode>) {
         </div>
       </div>
       {description && <div className="node-meta">{description}</div>}
+      {routingWarning && (
+        <div className="node-routing-warning">
+          <AlertTriangle size={11} /> Check routing setup
+        </div>
+      )}
       <div className="node-footer">
         <span className="node-status">{stateLabel}</span>
         <span>
@@ -268,7 +282,11 @@ export function Topology({
     id: d.id,
     type: "networkDevice",
     position: d.position,
-    data: { ...d, onQuickAdd } as NetworkDevice,
+    data: {
+      ...d,
+      onQuickAdd,
+      routingWarning: hasRoutingUpstream(d.id, devices, connections),
+    } as NetworkDevice,
   }));
   const [nodes, setNodes, onNodesChange] =
     useNodesState<TopologyNode>(incomingNodes);
@@ -302,19 +320,21 @@ export function Topology({
   const edges: TopologyEdge[] = connections.map((c) => {
     const source = devices.find((device) => device.id === c.source),
       target = devices.find((device) => device.id === c.target),
-      status = connectionStatusFor(source, target, c.status);
+      status = connectionStatusFor(source, target, c.status),
+      disconnected = connectionIsDisconnected(source, target);
     return {
       id: c.id,
       source: c.source,
       target: c.target,
       type: "networkConnection",
       data: { ...c, status, onDelete: onConnectionDelete },
-      animated: c.state === "Future",
+      animated: c.state === "Future" || status === "Planned" || disconnected,
       markerEnd: { type: MarkerType.ArrowClosed },
-      className: `edge-${c.state.toLowerCase()} edge-${status.toLowerCase().replace(" ", "-")}`,
+      className: `edge-${c.state.toLowerCase()} edge-${status.toLowerCase().replace(" ", "-")}${disconnected ? " edge-disconnected" : ""}`,
       style: {
-        stroke:
-          status === "Known"
+        stroke: disconnected
+          ? "#9a9ca3"
+          : status === "Known"
             ? "#34d399"
             : status === "Needs Verification"
               ? "#fbbf24"
