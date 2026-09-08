@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   Cable,
   Cloud,
+  EthernetPort,
   Laptop,
   MonitorSmartphone,
   Phone,
@@ -85,6 +86,15 @@ const templates: DeviceTemplate[] = [
     connectionType: "Structured cabling",
     notes: "Record rack position, port labels and destination mapping.",
     icon: MonitorSmartphone,
+    group: "Distribution & Wi-Fi",
+  },
+  {
+    name: "Ethernet outlet / data point",
+    deviceType: "Ethernet outlet",
+    connectionType: "Structured cabling / Ethernet",
+    notes:
+      "Record the outlet label, room or desk location, patch-panel port and connected switch port.",
+    icon: EthernetPort,
     group: "Distribution & Wi-Fi",
   },
   {
@@ -185,25 +195,15 @@ export function DevicePalette({
         className="device-palette"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="add-device-title"
+        aria-label="Add a device"
       >
-        <header>
-          <div>
-            <span className="eyebrow">Component catalogue</span>
-            <h2 id="add-device-title">Add to the topology</h2>
-            <p>
-              Choose a component type. You can complete its technical details
-              next.
-            </p>
-          </div>
-          <button
-            className="icon-button"
-            onClick={onClose}
-            aria-label="Close catalogue"
-          >
-            <X />
-          </button>
-        </header>
+        <button
+          className="icon-button palette-close"
+          onClick={onClose}
+          aria-label="Close catalogue"
+        >
+          <X />
+        </button>
         <label className="palette-search">
           <Search size={17} />
           <input

@@ -47,6 +47,8 @@ function validDevice(value: unknown): value is NetworkDevice {
     requiredText(value.deviceType) &&
     text(value.manufacturer) &&
     text(value.model) &&
+    (value.wirelessNetworks === undefined ||
+      text(value.wirelessNetworks, 2000)) &&
     text(value.managementIp) &&
     text(value.subnetVlan) &&
     text(value.macAddress) &&

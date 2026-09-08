@@ -1,7 +1,8 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { AlertTriangle, Trash2, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertTriangle, ChevronDown, Trash2, X } from "lucide-react";
 import type { NetworkConnection, NetworkDevice, RecordStatus } from "../types";
 import { CustomSelect, DatePicker } from "./FormControls";
+
 const statuses: RecordStatus[] = [
   "Known",
   "Needs Verification",
@@ -11,35 +12,14 @@ const statuses: RecordStatus[] = [
 ];
 const statusOptions = statuses.map((value) => ({ value, label: value }));
 const stateOptions = [
-  {
-    value: "Current",
-    label: "Current",
-    description: "Existing infrastructure",
-  },
-  {
-    value: "Future",
-    label: "Future",
-    description: "Proposed or planned design",
-  },
+  { value: "Current", label: "Current" },
+  { value: "Future", label: "Future" },
 ];
-const fields: [keyof NetworkDevice, string, string?][] = [
-  ["hostname", "Hostname"],
-  ["deviceType", "Device type"],
-  ["manufacturer", "Manufacturer"],
-  ["model", "Model"],
-  ["managementIp", "Management IP"],
-  ["subnetVlan", "Subnet / VLAN"],
-  ["macAddress", "MAC address"],
-  ["serialNumber", "Serial number"],
-  ["connectionType", "Connection type"],
-  ["physicalLocation", "Physical location"],
-  ["switchPort", "Switch port"],
-  ["lastVerified", "Last verified", "date"],
-];
+
 interface DeviceProps {
   kind: "device";
   value: NetworkDevice;
-  onSave: (v: NetworkDevice) => void;
+  onSave: (value: NetworkDevice) => void;
   onDelete?: () => void;
   onClose: () => void;
 }
@@ -47,28 +27,41 @@ interface ConnectionProps {
   kind: "connection";
   value: NetworkConnection;
   deviceNames: Record<string, string>;
-  onSave: (v: NetworkConnection) => void;
+  onSave: (value: NetworkConnection) => void;
   onDelete?: () => void;
   onClose: () => void;
 }
+
 export function Drawer(props: DeviceProps | ConnectionProps) {
   return (
     <aside className="drawer" aria-label={`${props.kind} editor`}>
       <div className="drawer-header">
         <div>
-          <span className="eyebrow">{props.kind} editor</span>
+          <span className="eyebrow">{props.kind} · autosaves</span>
           <h2>
             {props.value.id.startsWith("new-") ? "New " : ""}
             {props.kind}
           </h2>
         </div>
-        <button
-          className="icon-button"
-          onClick={props.onClose}
-          aria-label="Close editor"
-        >
-          <X />
-        </button>
+        <div className="drawer-header-actions">
+          {props.onDelete && (
+            <button
+              className="icon-button drawer-delete"
+              onClick={props.onDelete}
+              aria-label={`Remove ${props.kind}`}
+              title={`Remove ${props.kind}`}
+            >
+              <Trash2 size={17} />
+            </button>
+          )}
+          <button
+            className="icon-button"
+            onClick={props.onClose}
+            aria-label="Close editor"
+          >
+            <X />
+          </button>
+        </div>
       </div>
       {props.kind === "device" ? (
         <DeviceForm {...props} />
@@ -78,165 +71,200 @@ export function Drawer(props: DeviceProps | ConnectionProps) {
     </aside>
   );
 }
-function DeviceForm({ value, onSave, onDelete }: DeviceProps) {
-  const [draft, setDraft] = useState(value);
+
+function DeviceForm({ value, onSave }: DeviceProps) {
+  const [draft, setDraft] = useState(value),
+    [detailsOpen, setDetailsOpen] = useState(false);
   useEffect(() => setDraft(value), [value]);
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    onSave(draft);
+  const change = (next: NetworkDevice) => {
+    setDraft(next);
+    onSave(next);
   };
+  const input = (key: keyof NetworkDevice, label: string, wide = false) => (
+    <label className={wide ? "span-2" : ""}>
+      <span>{label}</span>
+      <input
+        value={String(draft[key])}
+        onChange={(event) => change({ ...draft, [key]: event.target.value })}
+      />
+    </label>
+  );
   return (
-    <form onSubmit={submit} className="editor-form">
+    <form className="editor-form" onSubmit={(event) => event.preventDefault()}>
       <SensitiveDataNotice />
-      <div className="form-grid">
-        {fields.map(([key, label, type]) => (
-          <label
-            key={key}
-            className={
-              key === "hostname" || key === "deviceType" ? "span-2" : ""
-            }
-          >
-            <span>{label}</span>
-            {type === "date" ? (
-              <DatePicker
-                label={label}
-                value={String(draft[key])}
-                onChange={(v) => setDraft({ ...draft, [key]: v })}
+      <section className="editor-section">
+        <h3>Device</h3>
+        <div className="form-grid">
+          {input("hostname", "Name", true)}
+          <div className="device-type-summary span-2">
+            <span>Device type</span>
+            <strong>{draft.deviceType}</strong>
+          </div>
+          {draft.deviceType.toLowerCase().includes("wireless access point") && (
+            <label className="span-2">
+              <span>Network names (SSIDs)</span>
+              <textarea
+                rows={2}
+                value={draft.wirelessNetworks ?? ""}
+                onChange={(event) =>
+                  change({ ...draft, wirelessNetworks: event.target.value })
+                }
+                placeholder="One network per line, for example: Office Wi-Fi — 5 GHz"
               />
-            ) : (
-              <input
-                value={String(draft[key])}
-                onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
-              />
-            )}
+            </label>
+          )}
+          <label>
+            <span>Status</span>
+            <CustomSelect
+              label="Device status"
+              value={draft.status}
+              options={statusOptions}
+              onChange={(status) =>
+                change({ ...draft, status: status as RecordStatus })
+              }
+            />
           </label>
-        ))}
+          <label>
+            <span>State</span>
+            <CustomSelect
+              label="Infrastructure state"
+              value={draft.state}
+              options={stateOptions}
+              onChange={(state) =>
+                change({ ...draft, state: state as "Current" | "Future" })
+              }
+            />
+          </label>
+          {input("manufacturer", "Manufacturer")}
+          {input("model", "Model")}
+          {input("physicalLocation", "Physical location", true)}
+          {input("connectionType", "Connection type", true)}
+        </div>
+      </section>
+      <button
+        type="button"
+        className={`editor-details-toggle ${detailsOpen ? "open" : ""}`}
+        onClick={() => setDetailsOpen((open) => !open)}
+        aria-expanded={detailsOpen}
+      >
+        More details <ChevronDown size={16} />
+      </button>
+      {detailsOpen && (
+        <section className="editor-section editor-secondary">
+          <div className="form-grid">
+            {input("managementIp", "Management IP")}
+            {input("subnetVlan", "Subnet / VLAN")}
+            {input("switchPort", "Switch / panel port")}
+            {input("macAddress", "MAC address")}
+            {input("serialNumber", "Serial number")}
+            <label>
+              <span>Last verified</span>
+              <DatePicker
+                label="Last verified"
+                value={draft.lastVerified}
+                onChange={(lastVerified) => change({ ...draft, lastVerified })}
+              />
+            </label>
+          </div>
+        </section>
+      )}
+      <section className="editor-section editor-notes">
         <label>
-          <span>Status</span>
-          <CustomSelect
-            label="Device status"
-            value={draft.status}
-            options={statusOptions}
-            onChange={(v) => setDraft({ ...draft, status: v as RecordStatus })}
-          />
-        </label>
-        <label>
-          <span>Infrastructure state</span>
-          <CustomSelect
-            label="Infrastructure state"
-            value={draft.state}
-            options={stateOptions}
-            onChange={(v) =>
-              setDraft({ ...draft, state: v as "Current" | "Future" })
-            }
-          />
-        </label>
-        <label className="span-2">
           <span>Notes</span>
           <textarea
-            rows={5}
+            rows={4}
             value={draft.notes}
-            onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
+            onChange={(event) =>
+              change({ ...draft, notes: event.target.value })
+            }
           />
         </label>
-      </div>
-      <div className="form-actions">
-        <button type="submit" className="primary">
-          Save device
-        </button>
-        <button type="button" className="danger" onClick={onDelete}>
-          <Trash2 size={16} /> Remove
-        </button>
-      </div>
+      </section>
     </form>
   );
 }
-function ConnectionForm({
-  value,
-  deviceNames,
-  onSave,
-  onDelete,
-}: ConnectionProps) {
+
+function ConnectionForm({ value, deviceNames, onSave }: ConnectionProps) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   const deviceOptions = Object.entries(deviceNames).map(([value, label]) => ({
     value,
     label,
   }));
+  const change = (next: NetworkConnection) => {
+    setDraft(next);
+    onSave(next);
+  };
   return (
-    <form
-      className="editor-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSave(draft);
-      }}
-    >
+    <form className="editor-form" onSubmit={(event) => event.preventDefault()}>
       <SensitiveDataNotice />
-      <div className="form-grid">
-        <label className="span-2">
-          <span>Label</span>
-          <input
-            value={draft.label}
-            onChange={(e) => setDraft({ ...draft, label: e.target.value })}
-          />
-        </label>
-        <label>
-          <span>From</span>
-          <CustomSelect
-            label="Connection source"
-            value={draft.source}
-            options={deviceOptions}
-            onChange={(v) => setDraft({ ...draft, source: v })}
-          />
-        </label>
-        <label>
-          <span>To</span>
-          <CustomSelect
-            label="Connection target"
-            value={draft.target}
-            options={deviceOptions}
-            onChange={(v) => setDraft({ ...draft, target: v })}
-          />
-        </label>
-        <label className="span-2">
-          <span>Connection type</span>
-          <input
-            value={draft.connectionType}
-            onChange={(e) =>
-              setDraft({ ...draft, connectionType: e.target.value })
-            }
-          />
-        </label>
-        <label>
-          <span>Status</span>
-          <CustomSelect
-            label="Connection status"
-            value={draft.status}
-            options={statusOptions}
-            onChange={(v) => setDraft({ ...draft, status: v as RecordStatus })}
-          />
-        </label>
-        <label>
-          <span>Infrastructure state</span>
-          <CustomSelect
-            label="Infrastructure state"
-            value={draft.state}
-            options={stateOptions}
-            onChange={(v) =>
-              setDraft({ ...draft, state: v as "Current" | "Future" })
-            }
-          />
-        </label>
-      </div>
-      <div className="form-actions">
-        <button className="primary">Save connection</button>
-        <button type="button" className="danger" onClick={onDelete}>
-          <Trash2 size={16} /> Remove
-        </button>
-      </div>
+      <section className="editor-section">
+        <h3>Connection</h3>
+        <div className="form-grid">
+          <label className="span-2">
+            <span>Label</span>
+            <input
+              value={draft.label}
+              onChange={(event) =>
+                change({ ...draft, label: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            <span>From</span>
+            <CustomSelect
+              label="Connection source"
+              value={draft.source}
+              options={deviceOptions}
+              onChange={(source) => change({ ...draft, source })}
+            />
+          </label>
+          <label>
+            <span>To</span>
+            <CustomSelect
+              label="Connection target"
+              value={draft.target}
+              options={deviceOptions}
+              onChange={(target) => change({ ...draft, target })}
+            />
+          </label>
+          <label className="span-2">
+            <span>Connection type</span>
+            <input
+              value={draft.connectionType}
+              onChange={(event) =>
+                change({ ...draft, connectionType: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            <span>Status</span>
+            <CustomSelect
+              label="Connection status"
+              value={draft.status}
+              options={statusOptions}
+              onChange={(status) =>
+                change({ ...draft, status: status as RecordStatus })
+              }
+            />
+          </label>
+          <label>
+            <span>State</span>
+            <CustomSelect
+              label="Infrastructure state"
+              value={draft.state}
+              options={stateOptions}
+              onChange={(state) =>
+                change({ ...draft, state: state as "Current" | "Future" })
+              }
+            />
+          </label>
+        </div>
+      </section>
     </form>
   );
 }
+
 function SensitiveDataNotice() {
   return (
     <div className="sensitive-data-notice">

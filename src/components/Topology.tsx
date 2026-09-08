@@ -26,6 +26,7 @@ import {
 import {
   Cable,
   CircleHelp,
+  EthernetPort,
   Radio,
   Router,
   Server,
@@ -47,6 +48,7 @@ const iconFor = (type: string) => {
   if (t.includes("firewall")) return Shield;
   if (t.includes("wifi") || t.includes("wireless")) return Wifi;
   if (t.includes("router")) return Router;
+  if (t.includes("outlet") || t.includes("data point")) return EthernetPort;
   if (t.includes("switch")) return Cable;
   if (t.includes("internet") || t.includes("vpn")) return Radio;
   if (t.includes("client")) return Users;
@@ -60,6 +62,10 @@ type QuickAddData = NetworkDevice & {
 
 function DeviceNode({ data }: NodeProps<TopologyNode>) {
   const Icon = iconFor(data.deviceType);
+  const description = [data.manufacturer, data.model]
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join(" ");
   const quickAdd = (data as QuickAddData).onQuickAdd;
   const pointerStart = useRef({ x: 0, y: 0 });
   const clickHandle = (event: MouseEvent, side: "before" | "after") => {
@@ -75,7 +81,7 @@ function DeviceNode({ data }: NodeProps<TopologyNode>) {
   };
   return (
     <div
-      className={`network-node status-${data.status.toLowerCase().replace(" ", "-")} state-${data.state.toLowerCase()}`}
+      className={`network-node ${description ? "" : "node-compact"} status-${data.status.toLowerCase().replace(" ", "-")} state-${data.state.toLowerCase()}`}
     >
       <Handle
         type="target"
@@ -96,9 +102,7 @@ function DeviceNode({ data }: NodeProps<TopologyNode>) {
           </div>
         </div>
       </div>
-      <div className="node-meta">
-        {data.manufacturer} {data.model}
-      </div>
+      {description && <div className="node-meta">{description}</div>}
       <div className="node-footer">
         <span className="node-status">
           {data.state === "Future" ? "Future · " : ""}
@@ -217,26 +221,34 @@ export function Topology({
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
   }, [contextMenu]);
-  const edges: TopologyEdge[] = connections.map((c) => ({
-    id: c.id,
-    source: c.source,
-    target: c.target,
-    type: "networkConnection",
-    data: c,
-    animated: c.state === "Future",
-    markerEnd: { type: MarkerType.ArrowClosed },
-    className: `edge-${c.state.toLowerCase()} edge-${c.status.toLowerCase().replace(" ", "-")}`,
-    style: {
-      stroke:
-        c.status === "Known"
-          ? "#34d399"
-          : c.status === "Needs Verification"
-            ? "#fbbf24"
-            : c.status === "Compromised" || c.status === "Removed"
-              ? "#f87171"
-              : "#3d75ed",
-    },
-  }));
+  const edges: TopologyEdge[] = connections.map((c) => {
+    const source = devices.find((device) => device.id === c.source),
+      target = devices.find((device) => device.id === c.target),
+      status =
+        source?.status === "Known" && target?.status === "Known"
+          ? "Known"
+          : c.status;
+    return {
+      id: c.id,
+      source: c.source,
+      target: c.target,
+      type: "networkConnection",
+      data: { ...c, status },
+      animated: c.state === "Future",
+      markerEnd: { type: MarkerType.ArrowClosed },
+      className: `edge-${c.state.toLowerCase()} edge-${status.toLowerCase().replace(" ", "-")}`,
+      style: {
+        stroke:
+          status === "Known"
+            ? "#34d399"
+            : status === "Needs Verification"
+              ? "#fbbf24"
+              : status === "Compromised" || status === "Removed"
+                ? "#f87171"
+                : "#3d75ed",
+      },
+    };
+  });
   return (
     <div className="topology-canvas">
       <ReactFlow

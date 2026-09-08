@@ -32,11 +32,12 @@ Continue with [Cloudflare deployment](docs/CLOUDFLARE_DEPLOYMENT.md).
 ## Features
 
 - Drag-and-drop topology with labelled relationships, multi-select movement, quick-attached nodes and a canvas context menu
+- Guided device catalogue with Ethernet outlets, canonical AP numbering and optional SSID details
 - Location dashboard and inter-site VPN/dependency mapping
 - Asset and IP/VLAN registers
 - Current and future-state modelling
 - Known, verification, planned, retired, compromised and removed states
-- Autosaved drafts, direct publishing and restorable publication history
+- Autosaved topology and editor changes, direct publishing and restorable publication history
 - Printable management reports
 - Portable JSON import and export
 - Optional passkey-only accounts, eight-hour sessions, multiple passkeys and administrator-managed recovery

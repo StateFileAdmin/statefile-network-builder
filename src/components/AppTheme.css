@@ -49,6 +49,126 @@ body {
   border: 1px solid var(--line-strong);
   background: transparent;
 }
+.drawer-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.drawer-header-actions .icon-button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  background: var(--panel-2);
+}
+.drawer-header-actions .drawer-delete {
+  color: var(--red);
+}
+.drawer-header-actions .drawer-delete:hover {
+  border-color: rgba(248, 113, 113, 0.55);
+  background: rgba(248, 113, 113, 0.1);
+}
+.editor-section + .editor-section {
+  margin-top: 18px;
+}
+.editor-section h3 {
+  margin: 0 0 12px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+}
+.drawer .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.drawer .form-grid > label {
+  min-width: 0;
+}
+.drawer .form-grid > label > span {
+  min-height: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.drawer .form-grid input,
+.drawer .select-trigger,
+.drawer .date-trigger {
+  height: 36px;
+  min-height: 36px;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-radius: 4px;
+}
+.drawer .custom-select,
+.drawer .date-picker {
+  min-width: 0;
+}
+.drawer .select-trigger > span,
+.drawer .date-trigger > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.drawer .select-menu {
+  min-width: 100%;
+  border-radius: 4px;
+}
+.drawer .select-option {
+  min-height: 36px;
+  padding: 7px 9px;
+  align-items: center;
+}
+.device-type-summary {
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel-2);
+}
+.device-type-summary span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 9px;
+}
+.device-type-summary strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.editor-section > label > span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.editor-section > label textarea {
+  width: 100%;
+}
+.editor-details-toggle {
+  width: 100%;
+  justify-content: space-between;
+  margin-top: 18px;
+  padding: 9px 10px;
+  border-color: var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+}
+.editor-details-toggle svg {
+  transition: transform 150ms ease;
+}
+.editor-details-toggle.open svg {
+  transform: rotate(180deg);
+}
+.editor-secondary {
+  padding-top: 2px;
+}
+.editor-notes {
+  padding-bottom: 8px;
+}
 button {
   border-radius: 6px;
   background: var(--panel-3);
@@ -121,6 +241,12 @@ button.primary:hover {
   border-color: rgba(52, 211, 153, 0.68);
   background: #111113;
   box-shadow: 0 14px 32px rgba(0, 0, 0, 0.3);
+}
+.network-node.node-compact {
+  min-height: 70px;
+}
+.network-node.node-compact .node-footer {
+  margin-top: 6px;
 }
 .network-node:hover {
   border-color: #78a0ff;
@@ -209,6 +335,36 @@ button.primary:hover {
 .device-palette {
   border-color: var(--line-strong);
   background: var(--panel);
+}
+.device-palette {
+  position: relative;
+}
+.device-palette .palette-close {
+  position: absolute;
+  z-index: 2;
+  top: 17px;
+  right: 20px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  background: var(--panel-2);
+}
+.device-palette .palette-search {
+  margin: 17px 72px 4px 25px;
+  border-radius: 4px;
+}
+.device-palette .palette-search:focus-within {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue);
+}
+.device-palette .palette-search input:focus,
+.device-palette .palette-search input:focus-visible {
+  outline: none;
+}
+.device-palette .palette-search input::selection {
+  color: var(--text);
+  background: rgba(61, 117, 237, 0.42);
 }
 .drawer-header {
   background: rgba(16, 17, 15, 0.96);
@@ -403,10 +559,10 @@ td {
   .editor-form {
     padding: 15px 16px 24px;
   }
-  .form-grid {
+  .drawer .form-grid {
     grid-template-columns: 1fr;
   }
-  .form-grid .span-2 {
+  .drawer .form-grid .span-2 {
     grid-column: 1;
   }
   .form-actions {
@@ -443,8 +599,8 @@ td {
   .device-palette > header {
     padding: 17px 18px 13px;
   }
-  .palette-search {
-    margin: 12px 18px 2px;
+  .device-palette .palette-search {
+    margin: 14px 64px 2px 18px;
   }
   .palette-scroll {
     padding: 3px 18px 20px;

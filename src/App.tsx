@@ -60,6 +60,7 @@ const blankDevice = (): NetworkDevice => ({
   deviceType: "Network device",
   manufacturer: "",
   model: "",
+  wirelessNetworks: "",
   managementIp: "",
   subnetVlan: "",
   macAddress: "",
@@ -73,6 +74,22 @@ const blankDevice = (): NetworkDevice => ({
   state: "Current",
   position: { x: 300, y: 250 },
 });
+const defaultDeviceName = (
+  template: DeviceTemplate,
+  devices: NetworkDevice[],
+) => {
+  if (template.deviceType.toLowerCase() !== "wireless access point")
+    return template.name;
+  const used = new Set(
+    devices
+      .map((device) => /^AP-(\d+)$/i.exec(device.hostname.trim())?.[1])
+      .filter((number): number is string => Boolean(number))
+      .map(Number),
+  );
+  let number = 1;
+  while (used.has(number)) number += 1;
+  return `AP-${String(number).padStart(2, "0")}`;
+};
 const readRoute = () => {
   const parts = window.location.hash.slice(1).split("/"),
     views: View[] = ["topology", "assets", "ip-plan", "report"];
@@ -102,7 +119,15 @@ export function App() {
     [view, setView] = useState<View>(initialRoute.view),
     [selection, setSelection] = useState<Selection>(null),
     [notice, setNotice] = useState(""),
-    [paletteOpen, setPaletteOpen] = useState(false);
+    [paletteOpen, setPaletteOpen] = useState(false),
+    [pendingAttachment, setPendingAttachment] = useState<{
+      sourceId: string;
+      side: "before" | "after";
+    } | null>(null),
+    [pendingPosition, setPendingPosition] = useState<{
+      x: number;
+      y: number;
+    } | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const [loadError, setLoadError] = useState(""),
     [sync, setSync] = useState<SyncState>("idle"),
@@ -315,34 +340,37 @@ export function App() {
     window.setTimeout(() => setNotice(""), 2200);
   }
   const saveDevice = (device: NetworkDevice) => {
-    updateSite((s) => ({
-      ...s,
-      devices: s.devices.some((d) => d.id === device.id)
+    updateSite((s) => {
+      const devices = s.devices.some((d) => d.id === device.id)
         ? s.devices.map((d) => (d.id === device.id ? device : d))
-        : [...s.devices, device],
-    }));
+        : [...s.devices, device];
+      return {
+        ...s,
+        devices,
+        connections: s.connections.map((connection) => {
+          const source = devices.find((d) => d.id === connection.source),
+            target = devices.find((d) => d.id === connection.target);
+          return source?.status === "Known" && target?.status === "Known"
+            ? { ...connection, status: "Known" }
+            : connection;
+        }),
+      };
+    });
     setSelection({ kind: "device", id: device.id });
-    showNotice("Device saved");
   };
   const removeDevice = (id: string) =>
     setActionDialog({
       title: "Remove this device?",
       message:
-        "The device and its connections will remain as a red draft ghost until this location is published.",
+        "The device and all of its connections will be removed from the current draft. You can restore an earlier published version from Publication History.",
       confirmLabel: "Remove device",
       onConfirm: () => {
-        const removedAt = new Date().toISOString();
         updateSite((s) => ({
           ...s,
-          devices: s.devices.map((device) =>
-            device.id === id
-              ? { ...device, status: "Removed", removedAt }
-              : device,
-          ),
-          connections: s.connections.map((connection) =>
-            connection.source === id || connection.target === id
-              ? { ...connection, status: "Removed", removedAt }
-              : connection,
+          devices: s.devices.filter((device) => device.id !== id),
+          connections: s.connections.filter(
+            (connection) =>
+              connection.source !== id && connection.target !== id,
           ),
         }));
         setSelection(null);
@@ -357,25 +385,18 @@ export function App() {
         : [...s.connections, connection],
     }));
     setSelection({ kind: "connection", id: connection.id });
-    showNotice("Connection saved");
   };
   const removeConnection = (id: string) =>
     setActionDialog({
       title: "Remove this connection?",
       message:
-        "The link will remain as a red draft ghost until this location is published.",
+        "The connection will be removed from the current draft. You can restore an earlier published version from Publication History.",
       confirmLabel: "Remove connection",
       onConfirm: () => {
         updateSite((s) => ({
           ...s,
-          connections: s.connections.map((connection) =>
-            connection.id === id
-              ? {
-                  ...connection,
-                  status: "Removed",
-                  removedAt: new Date().toISOString(),
-                }
-              : connection,
+          connections: s.connections.filter(
+            (connection) => connection.id !== id,
           ),
         }));
         setSelection(null);
@@ -387,7 +408,8 @@ export function App() {
       d: NetworkDevice = template
         ? {
             ...base,
-            hostname: template.name,
+            position: pendingPosition ?? base.position,
+            hostname: defaultDeviceName(template, site.devices),
             deviceType: template.deviceType,
             connectionType: template.connectionType,
             notes: template.notes,
@@ -396,19 +418,26 @@ export function App() {
           }
         : base;
     saveDevice(d);
+    setPendingPosition(null);
     setView("topology");
     setPaletteOpen(false);
   };
-  const addDeviceAt = (position: { x: number; y: number }) => {
-    const device = { ...blankDevice(), position };
-    updateSite((current) => ({
-      ...current,
-      devices: [...current.devices, device],
-    }));
-    setSelection({ kind: "device", id: device.id });
-    showNotice("Device added");
+  const openDeviceMenu = (position?: { x: number; y: number }) => {
+    setPendingAttachment(null);
+    setPendingPosition(position ?? null);
+    setPaletteOpen(true);
   };
-  const addAttachedDevice = (sourceId: string, side: "before" | "after") => {
+  const openAttachedDeviceMenu = (
+    sourceId: string,
+    side: "before" | "after",
+  ) => {
+    setPendingPosition(null);
+    setPendingAttachment({ sourceId, side });
+    setPaletteOpen(true);
+  };
+  const addAttachedDevice = (template: DeviceTemplate) => {
+    if (!pendingAttachment) return;
+    const { sourceId, side } = pendingAttachment;
     const source = site.devices.find((device) => device.id === sourceId);
     if (!source) return;
     const horizontal = side === "after" ? 288 : -288,
@@ -433,14 +462,26 @@ export function App() {
         break;
       }
     }
-    const device = { ...blankDevice(), position },
+    const device = {
+        ...blankDevice(),
+        position,
+        hostname: defaultDeviceName(template, site.devices),
+        deviceType: template.deviceType,
+        connectionType: template.connectionType,
+        notes: template.notes,
+        state: template.state || "Current",
+        status: template.status || "Needs Verification",
+      },
       connection: NetworkConnection = {
         id: uid("connection"),
         source: side === "after" ? source.id : device.id,
         target: side === "after" ? device.id : source.id,
-        label: "New connection",
+        label: "",
         connectionType: "Ethernet",
-        status: "Needs Verification",
+        status:
+          source.status === "Known" && device.status === "Known"
+            ? "Known"
+            : "Needs Verification",
         state: "Current",
       };
     updateSite((current) => ({
@@ -448,20 +489,28 @@ export function App() {
       devices: [...current.devices, device],
       connections: [...current.connections, connection],
     }));
+    setPendingAttachment(null);
+    setPaletteOpen(false);
     setSelection({ kind: "device", id: device.id });
     showNotice("Attached device added");
   };
   const connect = (c: Connection) => {
     if (!c.source || !c.target || c.source === c.target) return;
+    const source = site.devices.find((device) => device.id === c.source),
+      target = site.devices.find((device) => device.id === c.target);
     saveConnection({
       id: uid("connection"),
       source: c.source,
       target: c.target,
-      label: "New connection",
+      label: "",
       connectionType: "Ethernet",
-      status: "Needs Verification",
+      status:
+        source?.status === "Known" && target?.status === "Known"
+          ? "Known"
+          : "Needs Verification",
       state: "Current",
     });
+    showNotice("Connection added");
   };
   const exportJson = () => {
     const portablePackage = createExportPackage(register),
@@ -718,7 +767,7 @@ export function App() {
                 <span className="canvas-help">
                   Drag to arrange · connect using node handles
                 </span>
-                <button onClick={() => setPaletteOpen(true)}>
+                <button onClick={() => openDeviceMenu()}>
                   <Plus size={16} /> Add device
                 </button>
               </>
@@ -766,8 +815,8 @@ export function App() {
                       }));
                     }}
                     onConnect={connect}
-                    onQuickAdd={addAttachedDevice}
-                    onAddAt={addDeviceAt}
+                    onQuickAdd={openAttachedDeviceMenu}
+                    onAddAt={openDeviceMenu}
                   />
                 ) : (
                   <div className="empty-state">
@@ -776,7 +825,7 @@ export function App() {
                     <p>Add the first device to begin documenting this site.</p>
                     <button
                       className="primary"
-                      onClick={() => setPaletteOpen(true)}
+                      onClick={() => openDeviceMenu()}
                     >
                       <Plus size={16} /> Choose a component
                     </button>
@@ -788,7 +837,7 @@ export function App() {
               <AssetRegister
                 devices={visibleSite.devices}
                 onEdit={(id) => setSelection({ kind: "device", id })}
-                onAdd={() => setPaletteOpen(true)}
+                onAdd={() => openDeviceMenu()}
               />
             )}{" "}
             {view === "ip-plan" && (
@@ -843,8 +892,16 @@ export function App() {
       )}{" "}
       {paletteOpen && (
         <DevicePalette
-          onAdd={newDevice}
-          onClose={() => setPaletteOpen(false)}
+          onAdd={(template) =>
+            pendingAttachment
+              ? addAttachedDevice(template)
+              : newDevice(template)
+          }
+          onClose={() => {
+            setPaletteOpen(false);
+            setPendingAttachment(null);
+            setPendingPosition(null);
+          }}
         />
       )}{" "}
       {historyOpen && (

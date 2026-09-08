@@ -13,6 +13,7 @@ export interface NetworkDevice extends Record<string, unknown> {
   deviceType: string;
   manufacturer: string;
   model: string;
+  wirelessNetworks?: string;
   managementIp: string;
   subnetVlan: string;
   macAddress: string;
