@@ -67,6 +67,7 @@ const blankDevice = (): NetworkDevice => ({
   serviceProvider: "",
   serviceType: "",
   serviceReference: "",
+  serviceCost: "",
   wirelessNetworks: "",
   managementIp: "",
   subnetVlan: "",
@@ -428,7 +429,7 @@ export function App() {
         }),
       };
     });
-    showNotice("Topology cleaned up");
+    showNotice("Diagram cleaned up");
   };
   const openSite = (id: string) => {
     setSiteId(id);
@@ -756,7 +757,7 @@ export function App() {
     window.setTimeout(() => window.print(), 250);
   };
   const tabs: [View, string, typeof Map][] = [
-      ["topology", "Topology", Map],
+      ["topology", "Diagram", Map],
       ["assets", "Assets", Boxes],
       ["ip-plan", "IP plan", CircleDot],
       ["report", "Report", Printer],
@@ -848,7 +849,7 @@ export function App() {
             )}
             <small>
               {page === "site"
-                ? "Network topology"
+                ? "Network diagram"
                 : "Infrastructure source of truth"}
             </small>
           </div>
@@ -1064,7 +1065,7 @@ export function App() {
                 ) : (
                   <div className="empty-state">
                     <Network size={36} />
-                    <h2>No topology recorded</h2>
+                    <h2>No diagram recorded</h2>
                     <p>Add the first device to begin documenting this site.</p>
                     <button
                       className="primary"

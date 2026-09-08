@@ -261,6 +261,7 @@ function DeviceForm({ value, onSave, routingWarning }: DeviceProps) {
       {detailsOpen && (
         <section className="editor-section editor-secondary">
           <div className="form-grid">
+            {profile.service && input("serviceCost", "Cost")}
             {profile.managementIp && input("managementIp", "Management IP")}
             {profile.subnetVlan && input("subnetVlan", "Subnet / VLAN")}
             {profile.switchPort && input("switchPort", portLabel)}

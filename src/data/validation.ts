@@ -59,9 +59,7 @@ function validDevice(value: unknown): value is NetworkDevice {
     (value.serviceProvider === undefined || text(value.serviceProvider)) &&
     (value.serviceType === undefined || text(value.serviceType)) &&
     (value.serviceReference === undefined || text(value.serviceReference)) &&
-    (value.serviceProvider === undefined || text(value.serviceProvider)) &&
-    (value.serviceType === undefined || text(value.serviceType)) &&
-    (value.serviceReference === undefined || text(value.serviceReference)) &&
+    (value.serviceCost === undefined || text(value.serviceCost)) &&
     (value.wirelessNetworks === undefined ||
       text(value.wirelessNetworks, 2000)) &&
     (value.operatingMode === undefined ||

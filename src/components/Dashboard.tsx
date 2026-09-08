@@ -114,7 +114,8 @@ export function Dashboard({
           <div>
             <h2>Locations</h2>
             <p>
-              Each location has its own topology, asset register and IP plan.
+              Each location has its own network diagram, asset register and IP
+              plan.
             </p>
           </div>
           <button onClick={() => setSiteForm(emptySite())}>
@@ -404,7 +405,7 @@ function RelationshipModal({
       >
         <header>
           <div>
-            <span className="eyebrow">Organisation topology</span>
+            <span className="eyebrow">Organisation diagram</span>
             <h2>Site relationship</h2>
           </div>
           <button type="button" className="icon-button" onClick={onClose}>
