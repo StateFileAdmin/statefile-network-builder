@@ -8,6 +8,7 @@ import "./PublishDialog.css";
 interface Publication {
   id: number;
   register_version: number;
+  site_version: number;
   release_note: string;
   published_at: string;
   published_by: string;
@@ -123,7 +124,7 @@ export function PublicationHistoryDialog({
                   <ArrowLeft size={14} /> Back
                 </button>
                 <div>
-                  <b>Version {preview.register_version}</b>
+                  <b>Version {preview.site_version}</b>
                   <span>
                     {new Date(preview.published_at).toLocaleString("en-AU")}
                   </span>
@@ -184,7 +185,7 @@ export function PublicationHistoryDialog({
             items.map((item) => (
               <article key={item.id}>
                 <div>
-                  <b>Version {item.register_version}</b>
+                  <b>Version {item.site_version}</b>
                   <span>
                     {new Date(item.published_at).toLocaleString("en-AU")} ·{" "}
                     {item.published_by}
@@ -205,7 +206,7 @@ export function PublicationHistoryDialog({
                       disabled={busy}
                       onClick={() =>
                         setActionDialog({
-                          title: `Restore version ${item.register_version}?`,
+                          title: `Restore version ${item.site_version}?`,
                           message: `This replaces the current ${site.name} draft with the version published on ${new Date(item.published_at).toLocaleString("en-AU")}. Publication history remains available.`,
                           confirmLabel: "Restore version",
                           onConfirm: () => restore(item),

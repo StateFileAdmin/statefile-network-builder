@@ -1,6 +1,12 @@
 import { AlertTriangle, Pencil, Plus, Trash2 } from "lucide-react";
-import type { IpPlanEntry, NetworkDevice, RecordStatus } from "../types";
+import type {
+  IpPlanEntry,
+  NetworkConnection,
+  NetworkDevice,
+  RecordStatus,
+} from "../types";
 import { CustomSelect } from "./FormControls";
+import { portSummaryForDevice, portSummaryLabel } from "../data/portMap";
 const lifecycle = (device: NetworkDevice) =>
   device.lifecycle ??
   (device.status === "Retired"
@@ -24,10 +30,12 @@ export function StatusBadge({ status }: { status: RecordStatus }) {
 }
 export function AssetRegister({
   devices,
+  connections,
   onEdit,
   onAdd,
 }: {
   devices: NetworkDevice[];
+  connections: NetworkConnection[];
   onEdit: (id: string) => void;
   onAdd: () => void;
 }) {
@@ -75,20 +83,24 @@ export function AssetRegister({
                   </td>
                   <td>{d.deviceType}</td>
                   <td>
-                    {d.deviceType === "Internet service"
-                      ? [d.serviceProvider, d.serviceType]
-                          .filter(Boolean)
-                          .join(" · ") || "—"
-                      : [
-                            "Client group",
-                            "Camera group",
-                            "Ethernet outlet",
-                            "VPN service",
-                          ].includes(d.deviceType)
-                        ? "Not applicable"
-                        : [d.manufacturer, d.model]
+                    {portSummaryForDevice(d, devices, connections)
+                      ? portSummaryLabel(
+                          portSummaryForDevice(d, devices, connections)!,
+                        )
+                      : d.deviceType === "Internet service"
+                        ? [d.serviceProvider, d.serviceType]
                             .filter(Boolean)
-                            .join(" · ") || "—"}
+                            .join(" · ") || "—"
+                        : [
+                              "Client group",
+                              "Camera group",
+                              "Ethernet outlet",
+                              "VPN service",
+                            ].includes(d.deviceType)
+                          ? "Not applicable"
+                          : [d.manufacturer, d.model]
+                              .filter(Boolean)
+                              .join(" · ") || "—"}
                   </td>
                   <td>{d.managementIp || "—"}</td>
                   <td>{d.subnetVlan || "—"}</td>

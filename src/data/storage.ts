@@ -71,6 +71,7 @@ interface LocalPublication {
   release_note: string;
   published_at: string;
   published_by: string;
+  site_version?: number;
 }
 const localPublications = () => {
   try {
@@ -91,7 +92,9 @@ const localRequest = async (path: string, init?: RequestInit) => {
     return Response.json({
       publications: localPublications()
         .filter((item) => item.site_id === siteId)
-        .sort((a, b) => b.id - a.id),
+        .sort((a, b) => a.id - b.id)
+        .map((item, index) => ({ ...item, site_version: index + 1 }))
+        .reverse(),
     });
   }
   if (url.pathname === "/api/publications" && init?.method === "POST") {
@@ -100,6 +103,9 @@ const localRequest = async (path: string, init?: RequestInit) => {
         version: number;
         releaseNote: string;
       },
+      siteVersion =
+        localPublications().filter((item) => item.site_id === body.siteId)
+          .length + 1,
       item: LocalPublication = {
         id: Date.now(),
         site_id: body.siteId,
@@ -107,6 +113,7 @@ const localRequest = async (path: string, init?: RequestInit) => {
         release_note: body.releaseNote,
         published_at: new Date().toISOString(),
         published_by: "Local user",
+        site_version: siteVersion,
       };
     localStorage.setItem(
       PUBLICATIONS_KEY,
@@ -115,6 +122,7 @@ const localRequest = async (path: string, init?: RequestInit) => {
     return Response.json({
       id: item.id,
       publishedVersion: item.register_version,
+      siteVersion,
       publishedAt: item.published_at,
     });
   }

@@ -3,6 +3,46 @@
   position: relative;
   width: 100%;
 }
+.number-stepper {
+  position: relative;
+  width: 100%;
+}
+.number-stepper input {
+  width: 100%;
+  padding-right: 38px;
+}
+.number-stepper-controls {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  display: grid;
+  width: 32px;
+  grid-template-rows: 1fr 1fr;
+  overflow: hidden;
+  border-left: 1px solid var(--line);
+  border-radius: 0 5px 5px 0;
+}
+.number-stepper-controls button {
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--panel-2);
+  color: var(--muted);
+}
+.number-stepper-controls button:first-child {
+  border-bottom: 1px solid var(--line);
+}
+.number-stepper-controls button:hover:not(:disabled) {
+  background: var(--panel-3);
+  color: var(--text);
+}
+.number-stepper-controls button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
 .select-trigger,
 .date-trigger {
   width: 100%;

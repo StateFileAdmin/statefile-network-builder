@@ -9,6 +9,7 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
+  ChevronUp,
   ChevronLeft,
   ChevronRight,
   X,
@@ -127,6 +128,55 @@ export function CustomSelect({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+export function NumberStepper({
+  value,
+  min,
+  max,
+  onChange,
+  label,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  onChange: (value: number) => void;
+  label: string;
+}) {
+  const clamp = (next: number) => Math.max(min, Math.min(max, next));
+  return (
+    <div className="number-stepper">
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        aria-label={label}
+        value={value}
+        onChange={(event) => {
+          if (!/^\d*$/.test(event.target.value)) return;
+          onChange(clamp(Number(event.target.value) || min));
+        }}
+      />
+      <div className="number-stepper-controls">
+        <button
+          type="button"
+          aria-label={`Increase ${label}`}
+          disabled={value >= max}
+          onClick={() => onChange(clamp(value + 1))}
+        >
+          <ChevronUp size={13} />
+        </button>
+        <button
+          type="button"
+          aria-label={`Decrease ${label}`}
+          disabled={value <= min}
+          onClick={() => onChange(clamp(value - 1))}
+        >
+          <ChevronDown size={13} />
+        </button>
+      </div>
     </div>
   );
 }

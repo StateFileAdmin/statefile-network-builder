@@ -988,3 +988,147 @@ td {
     padding-right: 16px;
   }
 }
+
+.port-map {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 72%, transparent);
+}
+.port-inherited-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 20px 4px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--green) 45%, var(--line));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--green) 8%, var(--panel));
+  color: var(--green);
+  font-size: 0.78rem;
+}
+.port-inherited-summary span {
+  color: var(--text);
+}
+.port-map-heading,
+.port-map-legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.port-map-heading span {
+  color: var(--text);
+  font-weight: 650;
+}
+.port-map-heading small,
+.port-map-legend {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.port-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(30px, 1fr));
+  gap: 6px;
+  margin: 12px 0;
+}
+.port-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.port-map-readonly .port-button {
+  cursor: default;
+}
+.port-usage-toggle {
+  width: 100%;
+  min-height: 38px;
+  justify-content: space-between;
+  padding: 7px 9px 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--muted);
+}
+.port-usage-toggle i {
+  position: relative;
+  width: 34px;
+  height: 19px;
+  border-radius: 10px;
+  background: var(--panel-3);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.port-usage-toggle i::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition:
+    transform 0.16s ease,
+    background 0.16s ease;
+}
+.port-usage-toggle.active {
+  border-color: color-mix(in srgb, var(--green) 48%, var(--line));
+  color: var(--text);
+}
+.port-usage-toggle.active i {
+  background: color-mix(in srgb, var(--green) 30%, var(--panel-3));
+}
+.port-usage-toggle.active i::after {
+  transform: translateX(15px);
+  background: var(--green);
+}
+.port-button.connected {
+  border-color: var(--green);
+  background: color-mix(in srgb, var(--green) 17%, var(--panel-2));
+  color: var(--green);
+}
+.port-button.disabled {
+  border-color: color-mix(in srgb, var(--muted) 55%, transparent);
+  background: color-mix(in srgb, var(--muted) 11%, var(--panel-2));
+  color: color-mix(in srgb, var(--muted) 70%, transparent);
+  text-decoration: line-through;
+}
+.port-map-legend {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+.port-map-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.port-map-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--line);
+}
+.port-map-legend i.connected {
+  background: var(--green);
+}
+.port-map-legend i.disabled {
+  background: var(--muted);
+}
+@media (max-width: 520px) {
+  .port-grid {
+    grid-template-columns: repeat(6, minmax(28px, 1fr));
+  }
+  .port-map-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

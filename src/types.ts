@@ -31,6 +31,9 @@ export interface NetworkDevice extends Record<string, unknown> {
   wirelessNetworks?: string;
   operatingMode?: DeviceOperatingMode;
   quantity?: number;
+  portCount?: number;
+  connectedPorts?: number[];
+  disabledPorts?: number[];
   managementIp: string;
   subnetVlan: string;
   macAddress: string;
@@ -54,6 +57,7 @@ export interface NetworkConnection extends Record<string, unknown> {
   connectionType: string;
   status: RecordStatus;
   state: InfrastructureState;
+  countsTowardPorts?: boolean;
   removedAt?: string;
 }
 export interface IpPlanEntry {

@@ -47,6 +47,10 @@ const stringList = (value: unknown, maxItems = 500) =>
   Array.isArray(value) &&
   value.length <= maxItems &&
   value.every((item) => text(item, 4000));
+const portList = (value: unknown) =>
+  Array.isArray(value) &&
+  value.length <= 96 &&
+  value.every((item) => Number.isSafeInteger(item) && item >= 1 && item <= 96);
 
 function validDevice(value: unknown): value is NetworkDevice {
   return (
@@ -71,6 +75,12 @@ function validDevice(value: unknown): value is NetworkDevice {
         Number.isSafeInteger(value.quantity) &&
         value.quantity >= 1 &&
         value.quantity <= 10000)) &&
+    (value.portCount === undefined ||
+      (Number.isSafeInteger(value.portCount) &&
+        Number(value.portCount) >= 1 &&
+        Number(value.portCount) <= 96)) &&
+    (value.connectedPorts === undefined || portList(value.connectedPorts)) &&
+    (value.disabledPorts === undefined || portList(value.disabledPorts)) &&
     text(value.managementIp) &&
     text(value.subnetVlan) &&
     text(value.macAddress) &&
@@ -104,6 +114,8 @@ function validConnection(value: unknown): value is NetworkConnection {
     text(value.label) &&
     text(value.connectionType) &&
     (value.removedAt === undefined || text(value.removedAt, 100)) &&
+    (value.countsTowardPorts === undefined ||
+      typeof value.countsTowardPorts === "boolean") &&
     status(value.status) &&
     state(value.state)
   );

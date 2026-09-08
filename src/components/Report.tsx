@@ -5,6 +5,12 @@ import {
   deviceIsRetired,
 } from "../data/deviceStatus";
 import { StatusBadge } from "./Registers";
+import {
+  connectionPortLabel,
+  patchPortSummary,
+  portSummaryForDevice,
+  portSummaryLabel,
+} from "../data/portMap";
 import "./ReportTopology.css";
 const clip = (value: string, length = 28) =>
   value.length > length ? `${value.slice(0, length - 1)}…` : value;
@@ -81,6 +87,7 @@ function ReportTopology({ site }: { site: Site }) {
                 sourceDevice,
                 targetDevice,
               ),
+              displayLabel = connectionPortLabel(c, devices, connections),
               sx = source.x + nodeWidth,
               sy = source.y + nodeHeight / 2,
               tx = target.x,
@@ -89,7 +96,7 @@ function ReportTopology({ site }: { site: Site }) {
               my = (sy + ty) / 2,
               labelWidth = Math.min(
                 180,
-                Math.max(58, c.label.length * 5.7 + 14),
+                Math.max(58, displayLabel.length * 5.7 + 14),
               );
             return (
               <g
@@ -100,16 +107,20 @@ function ReportTopology({ site }: { site: Site }) {
                   d={`M ${sx} ${sy} C ${mx} ${sy}, ${mx} ${ty}, ${tx} ${ty}`}
                   markerEnd="url(#report-arrow)"
                 />
-                <rect
-                  x={mx - labelWidth / 2}
-                  y={my - 10}
-                  width={labelWidth}
-                  height="18"
-                  rx="4"
-                />
-                <text x={mx} y={my + 3} textAnchor="middle">
-                  {clip(c.label, 28)}
-                </text>
+                {displayLabel && (
+                  <>
+                    <rect
+                      x={mx - labelWidth / 2}
+                      y={my - 10}
+                      width={labelWidth}
+                      height="18"
+                      rx="4"
+                    />
+                    <text x={mx} y={my + 3} textAnchor="middle">
+                      {clip(displayLabel, 28)}
+                    </text>
+                  </>
+                )}
               </g>
             );
           })}
@@ -132,17 +143,21 @@ function ReportTopology({ site }: { site: Site }) {
                 </text>
                 <text className="device-detail" x="14" y="68">
                   {clip(
-                    d.quantity
-                      ? `${d.quantity} ${d.quantity === 1 ? "camera" : "cameras"}`
-                      : d.deviceType === "Internet service"
-                        ? [d.serviceProvider, d.serviceType]
-                            .filter(Boolean)
-                            .join(" · ") || "Service details required"
-                        : [d.manufacturer, d.model]
-                            .filter(Boolean)
-                            .join(" · ") ||
-                          d.connectionType ||
-                          "Details required",
+                    portSummaryForDevice(d, devices, connections)
+                      ? portSummaryLabel(
+                          portSummaryForDevice(d, devices, connections)!,
+                        )
+                      : d.quantity
+                        ? `${d.quantity} ${d.quantity === 1 ? "camera" : "cameras"}`
+                        : d.deviceType === "Internet service"
+                          ? [d.serviceProvider, d.serviceType]
+                              .filter(Boolean)
+                              .join(" · ") || "Service details required"
+                          : [d.manufacturer, d.model]
+                              .filter(Boolean)
+                              .join(" · ") ||
+                            d.connectionType ||
+                            "Details required",
                     36,
                   )}
                 </text>
@@ -189,7 +204,7 @@ export function ManagementReport({
   version,
 }: {
   site: Site;
-  version: number;
+  version: number | string;
 }) {
   const current = site.devices.filter(
     (d) => d.state === "Current" && d.status !== "Retired",
@@ -248,6 +263,38 @@ export function ManagementReport({
           device management IPs are intentionally excluded.
         </p>
       </section>
+      {current.some((device) => device.deviceType === "Patch panel") && (
+        <section>
+          <h2>Patch-panel port map</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Patch panel</th>
+                <th>Ports</th>
+                <th>Connected</th>
+                <th>Available</th>
+                <th>Disabled</th>
+              </tr>
+            </thead>
+            <tbody>
+              {current
+                .filter((device) => device.deviceType === "Patch panel")
+                .map((device) => {
+                  const summary = patchPortSummary(device);
+                  return (
+                    <tr key={device.id}>
+                      <td>{device.hostname}</td>
+                      <td>{summary.count}</td>
+                      <td>{summary.connected.join(", ") || "None"}</td>
+                      <td>{summary.available.join(", ") || "None"}</td>
+                      <td>{summary.disabled.join(", ") || "None"}</td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </section>
+      )}
       <section>
         <h2>Asset summary</h2>
         <table>

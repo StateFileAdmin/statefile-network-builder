@@ -7,8 +7,9 @@ import type {
   NetworkDevice,
   RecordStatus,
 } from "../types";
-import { CustomSelect, DatePicker } from "./FormControls";
+import { CustomSelect, DatePicker, NumberStepper } from "./FormControls";
 import { deviceFieldProfile } from "../data/deviceFields";
+import { patchPortSummary, type PortSummary } from "../data/portMap";
 
 const statuses: RecordStatus[] = [
   "Known",
@@ -48,6 +49,8 @@ interface DeviceProps {
   value: NetworkDevice;
   onSave: (value: NetworkDevice) => void;
   routingWarning?: boolean;
+  portSummary?: string;
+  portDetails?: PortSummary;
   onDelete?: () => void;
   onClose: () => void;
 }
@@ -55,6 +58,7 @@ interface ConnectionProps {
   kind: "connection";
   value: NetworkConnection;
   deviceNames: Record<string, string>;
+  portDeviceIds: string[];
   onSave: (value: NetworkConnection) => void;
   onDelete?: () => void;
   onClose: () => void;
@@ -100,7 +104,13 @@ export function Drawer(props: DeviceProps | ConnectionProps) {
   );
 }
 
-function DeviceForm({ value, onSave, routingWarning }: DeviceProps) {
+function DeviceForm({
+  value,
+  onSave,
+  routingWarning,
+  portSummary,
+  portDetails,
+}: DeviceProps) {
   const [draft, setDraft] = useState(value),
     [detailsOpen, setDetailsOpen] = useState(false);
   useEffect(() => setDraft(value), [value]);
@@ -116,6 +126,19 @@ function DeviceForm({ value, onSave, routingWarning }: DeviceProps) {
     setDraft(next);
     onSave(next);
   };
+  const cyclePort = (port: number) => {
+    const summary = patchPortSummary(draft);
+    const connected = new Set(summary.connected);
+    const disabled = new Set(summary.disabled);
+    if (connected.delete(port)) disabled.add(port);
+    else if (disabled.has(port)) disabled.delete(port);
+    else connected.add(port);
+    change({
+      ...draft,
+      connectedPorts: [...connected].sort((a, b) => a - b),
+      disabledPorts: [...disabled].sort((a, b) => a - b),
+    });
+  };
   const input = (key: keyof NetworkDevice, label: string, wide = false) => (
     <label className={wide ? "span-2" : ""}>
       <span>{label}</span>
@@ -128,6 +151,19 @@ function DeviceForm({ value, onSave, routingWarning }: DeviceProps) {
   return (
     <form className="editor-form" onSubmit={(event) => event.preventDefault()}>
       <SensitiveDataNotice />
+      {(value.deviceType === "Ethernet outlet" ||
+        value.deviceType === "Managed switch" ||
+        value.deviceType === "Unmanaged switch") &&
+        portSummary && (
+          <div className="port-inherited-summary">
+            <strong>
+              {value.deviceType === "Ethernet outlet"
+                ? "Inherited from patch panel"
+                : "Use across connected patch panels"}
+            </strong>
+            <span>{portSummary}</span>
+          </div>
+        )}
       {routingWarning && draft.operatingMode !== "Access point only" && (
         <div className="routing-setup-warning">
           <AlertTriangle size={16} />
@@ -176,20 +212,12 @@ function DeviceForm({ value, onSave, routingWarning }: DeviceProps) {
           {draft.deviceType === "Camera group" && (
             <label className="span-2">
               <span>Number of cameras</span>
-              <input
-                type="number"
+              <NumberStepper
+                value={draft.quantity ?? 1}
                 min={1}
                 max={10000}
-                value={draft.quantity ?? 1}
-                onChange={(event) =>
-                  change({
-                    ...draft,
-                    quantity: Math.max(
-                      1,
-                      Math.min(10000, Number(event.target.value) || 1),
-                    ),
-                  })
-                }
+                label="Number of cameras"
+                onChange={(quantity) => change({ ...draft, quantity })}
               />
             </label>
           )}
@@ -262,6 +290,23 @@ function DeviceForm({ value, onSave, routingWarning }: DeviceProps) {
         <section className="editor-section editor-secondary">
           <div className="form-grid">
             {profile.service && input("serviceCost", "Cost")}
+            {["Patch panel", "Managed switch", "Unmanaged switch"].includes(
+              draft.deviceType,
+            ) && (
+              <label>
+                <span>Port count</span>
+                <NumberStepper
+                  value={
+                    draft.portCount ??
+                    (draft.deviceType === "Unmanaged switch" ? 8 : 24)
+                  }
+                  min={1}
+                  max={96}
+                  label="Port count"
+                  onChange={(portCount) => change({ ...draft, portCount })}
+                />
+              </label>
+            )}
             {profile.managementIp && input("managementIp", "Management IP")}
             {profile.subnetVlan && input("subnetVlan", "Subnet / VLAN")}
             {profile.switchPort && input("switchPort", portLabel)}
@@ -275,6 +320,90 @@ function DeviceForm({ value, onSave, routingWarning }: DeviceProps) {
                 onChange={(lastVerified) => change({ ...draft, lastVerified })}
               />
             </label>
+            {draft.deviceType === "Patch panel" && (
+              <div className="port-map span-2">
+                <div className="port-map-heading">
+                  <span>Port map</span>
+                  <small>Click: available → connected → disabled</small>
+                </div>
+                <div className="port-grid">
+                  {Array.from(
+                    { length: patchPortSummary(draft).count },
+                    (_, index) => index + 1,
+                  ).map((port) => {
+                    const summary = patchPortSummary(draft);
+                    const state = summary.connected.includes(port)
+                      ? "connected"
+                      : summary.disabled.includes(port)
+                        ? "disabled"
+                        : "available";
+                    return (
+                      <button
+                        type="button"
+                        key={port}
+                        className={`port-button ${state}`}
+                        title={`Port ${port}: ${state}`}
+                        aria-label={`Port ${port}: ${state}`}
+                        onClick={() => cyclePort(port)}
+                      >
+                        {port}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="port-map-legend">
+                  <span>
+                    <i className="connected" /> Connected
+                  </span>
+                  <span>
+                    <i className="available" /> Available
+                  </span>
+                  <span>
+                    <i className="disabled" /> Disabled
+                  </span>
+                </div>
+              </div>
+            )}
+            {draft.deviceType === "Ethernet outlet" && portDetails && (
+              <div className="port-map port-map-readonly span-2">
+                <div className="port-map-heading">
+                  <span>Inherited outlet map</span>
+                  <small>Controlled by the connected patch panel</small>
+                </div>
+                <div className="port-grid">
+                  {Array.from(
+                    { length: portDetails.count },
+                    (_, index) => index + 1,
+                  ).map((port) => {
+                    const state = portDetails.connected.includes(port)
+                      ? "connected"
+                      : portDetails.disabled.includes(port)
+                        ? "disabled"
+                        : "available";
+                    return (
+                      <span
+                        key={port}
+                        className={`port-button ${state}`}
+                        title={`Outlet ${port}: ${state}`}
+                      >
+                        {port}
+                      </span>
+                    );
+                  })}
+                </div>
+                <div className="port-map-legend">
+                  <span>
+                    <i className="connected" /> Active outlet
+                  </span>
+                  <span>
+                    <i className="available" /> Available outlet
+                  </span>
+                  <span>
+                    <i className="disabled" /> Disabled outlet
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -294,7 +423,12 @@ function DeviceForm({ value, onSave, routingWarning }: DeviceProps) {
   );
 }
 
-function ConnectionForm({ value, deviceNames, onSave }: ConnectionProps) {
+function ConnectionForm({
+  value,
+  deviceNames,
+  portDeviceIds,
+  onSave,
+}: ConnectionProps) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   const deviceOptions = Object.entries(deviceNames).map(([value, label]) => ({
@@ -305,6 +439,9 @@ function ConnectionForm({ value, deviceNames, onSave }: ConnectionProps) {
     setDraft(next);
     onSave(next);
   };
+  const canUsePhysicalPort =
+    portDeviceIds.includes(draft.source) ||
+    portDeviceIds.includes(draft.target);
   return (
     <form className="editor-form" onSubmit={(event) => event.preventDefault()}>
       <SensitiveDataNotice />
@@ -347,6 +484,29 @@ function ConnectionForm({ value, deviceNames, onSave }: ConnectionProps) {
               }
             />
           </label>
+          {canUsePhysicalPort && (
+            <label className="span-2">
+              <span>Port usage</span>
+              <button
+                type="button"
+                className={`port-usage-toggle ${draft.countsTowardPorts !== false ? "active" : ""}`}
+                aria-pressed={draft.countsTowardPorts !== false}
+                onClick={() =>
+                  change({
+                    ...draft,
+                    countsTowardPorts: draft.countsTowardPorts === false,
+                  })
+                }
+              >
+                <span>
+                  {draft.countsTowardPorts !== false
+                    ? "Uses a physical port"
+                    : "Does not use a physical port"}
+                </span>
+                <i />
+              </button>
+            </label>
+          )}
           <label>
             <span>Status</span>
             <CustomSelect

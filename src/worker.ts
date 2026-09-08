@@ -327,7 +327,7 @@ export default {
         if (!siteId || !canAccessSite(user, siteId))
           return json({ error: "Not allowed." }, 403);
         const rows = await env.DB.prepare(
-          "SELECT id,register_version,release_note,published_at,published_by FROM register_publication WHERE register_id=? AND site_id=? ORDER BY id DESC LIMIT 100",
+          "SELECT id,register_version,release_note,published_at,published_by,ROW_NUMBER() OVER (ORDER BY id ASC) AS site_version FROM register_publication WHERE register_id=? AND site_id=? ORDER BY id DESC LIMIT 100",
         )
           .bind(REGISTER_ID, siteId)
           .all();
@@ -391,6 +391,11 @@ export default {
         return json({
           id: result.meta.last_row_id,
           publishedVersion: current.version,
+          siteVersion: await env.DB.prepare(
+            "SELECT COUNT(*) AS count FROM register_publication WHERE register_id=? AND site_id=? AND id<=?",
+          )
+            .bind(REGISTER_ID, site.id, result.meta.last_row_id)
+            .first("count"),
           publishedAt,
         });
       }
@@ -400,7 +405,7 @@ export default {
       );
       if (publicationMatch && request.method === "GET") {
         const publication = await env.DB.prepare(
-          "SELECT id,site_id,document,register_version,release_note,published_at,published_by FROM register_publication WHERE id=? AND register_id=?",
+          "SELECT p.id,p.site_id,p.document,p.register_version,p.release_note,p.published_at,p.published_by,(SELECT COUNT(*) FROM register_publication p2 WHERE p2.register_id=p.register_id AND p2.site_id=p.site_id AND p2.id<=p.id) AS site_version FROM register_publication p WHERE p.id=? AND p.register_id=?",
         )
           .bind(Number(publicationMatch[1]), REGISTER_ID)
           .first<{
@@ -408,6 +413,7 @@ export default {
             site_id: string;
             document: string;
             register_version: number;
+            site_version: number;
             release_note: string;
             published_at: string;
             published_by: string;
@@ -426,6 +432,7 @@ export default {
           publication: {
             id: publication.id,
             register_version: publication.register_version,
+            site_version: publication.site_version,
             release_note: publication.release_note,
             published_at: publication.published_at,
             published_by: publication.published_by,

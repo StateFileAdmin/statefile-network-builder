@@ -344,6 +344,12 @@ button.danger {
   font-size: 10px;
   margin-top: 3px;
 }
+.node-port-summary {
+  margin-top: 5px;
+  color: var(--green);
+  font-size: 9px;
+  font-weight: 650;
+}
 .node-footer {
   display: flex;
   justify-content: space-between;

@@ -46,6 +46,7 @@ import {
 import { MAX_REGISTER_BYTES } from "./data/validation";
 import { connectionStatusFor } from "./data/deviceStatus";
 import { hasRoutingUpstream } from "./data/topologyChecks";
+import { portSummaryForDevice, portSummaryLabel } from "./data/portMap";
 import type {
   NetworkConnection,
   NetworkDevice,
@@ -223,6 +224,9 @@ export function App() {
     [topologyDragging, setTopologyDragging] = useState(false),
     [publishing, setPublishing] = useState(false),
     [publishedVersion, setPublishedVersion] = useState<number | null>(null),
+    [publishedSiteVersion, setPublishedSiteVersion] = useState<number | null>(
+      null,
+    ),
     [publishedAt, setPublishedAt] = useState<string | null>(null),
     [actionDialog, setActionDialog] = useState<ActionDialogRequest | null>(
       null,
@@ -315,15 +319,23 @@ export function App() {
   }, [page, siteId, view]);
   useEffect(() => {
     if (!register || page !== "site" || sync === "saving") return;
+    setPublishedVersion(null);
+    setPublishedSiteVersion(null);
+    setPublishedAt(null);
     void authenticatedFetch(
       `/api/publications?siteId=${encodeURIComponent(siteId)}`,
     )
       .then(async (response) => {
         if (!response.ok) return;
         const result = (await response.json()) as {
-          publications?: { register_version: number; published_at: string }[];
+          publications?: {
+            register_version: number;
+            site_version: number;
+            published_at: string;
+          }[];
         };
         setPublishedVersion(result.publications?.[0]?.register_version ?? null);
+        setPublishedSiteVersion(result.publications?.[0]?.site_version ?? null);
         setPublishedAt(result.publications?.[0]?.published_at ?? null);
       })
       .catch(() => {});
@@ -793,6 +805,7 @@ export function App() {
         data = (await response.json()) as {
           error?: string;
           publishedVersion?: number;
+          siteVersion?: number;
           publishedAt?: string;
         };
       if (!response.ok)
@@ -803,6 +816,8 @@ export function App() {
         );
       if (data.publishedVersion !== undefined)
         setPublishedVersion(data.publishedVersion);
+      if (data.siteVersion !== undefined)
+        setPublishedSiteVersion(data.siteVersion);
       if (data.publishedAt) setPublishedAt(data.publishedAt);
       showNotice("Location published");
     } catch (cause) {
@@ -1080,6 +1095,7 @@ export function App() {
             {view === "assets" && (
               <AssetRegister
                 devices={visibleSite.devices}
+                connections={visibleSite.connections}
                 onEdit={(id) => setSelection({ kind: "device", id })}
                 onAdd={() => openDeviceMenu()}
               />
@@ -1107,7 +1123,7 @@ export function App() {
                 </div>
                 <ManagementReport
                   site={visibleSite}
-                  version={versionRef.current}
+                  version={publishedSiteVersion ?? "Draft"}
                 />
               </>
             )}
@@ -1123,6 +1139,19 @@ export function App() {
             site.devices,
             site.connections,
           )}
+          portSummary={(() => {
+            const summary = portSummaryForDevice(
+              selectedDevice,
+              site.devices,
+              site.connections,
+            );
+            return summary ? portSummaryLabel(summary) : undefined;
+          })()}
+          portDetails={portSummaryForDevice(
+            selectedDevice,
+            site.devices,
+            site.connections,
+          )}
           onSave={saveDevice}
           onDelete={isAdmin ? () => removeDevice(selectedDevice.id) : undefined}
           onClose={() => setSelection(null)}
@@ -1135,6 +1164,13 @@ export function App() {
           deviceNames={Object.fromEntries(
             site.devices.map((d) => [d.id, d.hostname]),
           )}
+          portDeviceIds={site.devices
+            .filter((device) =>
+              ["Managed switch", "Unmanaged switch", "Patch panel"].includes(
+                device.deviceType,
+              ),
+            )
+            .map((device) => device.id)}
           onSave={saveConnection}
           onDelete={
             isAdmin ? () => removeConnection(selectedConnection.id) : undefined

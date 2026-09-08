@@ -52,6 +52,11 @@ import {
   connectionStatusFor,
 } from "../data/deviceStatus";
 import { hasRoutingUpstream } from "../data/topologyChecks";
+import {
+  connectionPortLabel,
+  portSummaryForDevice,
+  portSummaryLabel,
+} from "../data/portMap";
 import "./Topology.css";
 
 const iconFor = (type: string) => {
@@ -78,6 +83,7 @@ const lifecycleFor = (device: NetworkDevice): DeviceLifecycle =>
 type QuickAddData = NetworkDevice & {
   onQuickAdd: (id: string, side: "before" | "after") => void;
   routingWarning: boolean;
+  portSummary?: string;
 };
 
 function DeviceNode({ data }: NodeProps<TopologyNode>) {
@@ -102,6 +108,7 @@ function DeviceNode({ data }: NodeProps<TopologyNode>) {
     .join(" ");
   const quickAdd = (data as QuickAddData).onQuickAdd;
   const routingWarning = (data as QuickAddData).routingWarning;
+  const portSummary = (data as QuickAddData).portSummary;
   const lifecycle = lifecycleFor(data);
   const statusLabel =
     data.status === "Needs Verification" ? "Verify" : data.status;
@@ -145,6 +152,7 @@ function DeviceNode({ data }: NodeProps<TopologyNode>) {
         </div>
       </div>
       {description && <div className="node-meta">{description}</div>}
+      {portSummary && <div className="node-port-summary">{portSummary}</div>}
       {routingWarning && (
         <div className="node-routing-warning">
           <AlertTriangle size={11} /> Check routing setup
@@ -286,6 +294,10 @@ export function Topology({
       ...d,
       onQuickAdd,
       routingWarning: hasRoutingUpstream(d.id, devices, connections),
+      portSummary: (() => {
+        const summary = portSummaryForDevice(d, devices, connections);
+        return summary ? portSummaryLabel(summary) : undefined;
+      })(),
     } as NetworkDevice,
   }));
   const [nodes, setNodes, onNodesChange] =
@@ -327,7 +339,12 @@ export function Topology({
       source: c.source,
       target: c.target,
       type: "networkConnection",
-      data: { ...c, status, onDelete: onConnectionDelete },
+      data: {
+        ...c,
+        label: connectionPortLabel(c, devices, connections),
+        status,
+        onDelete: onConnectionDelete,
+      },
       animated: c.state === "Future" || status === "Planned" || disconnected,
       markerEnd: { type: MarkerType.ArrowClosed },
       className: `edge-${c.state.toLowerCase()} edge-${status.toLowerCase().replace(" ", "-")}${disconnected ? " edge-disconnected" : ""}`,
