@@ -46,6 +46,8 @@ const profiles: Record<string, DeviceFieldProfile> = {
     serialNumber: true,
   },
   Router: managedHardware,
+  "Router / Gateway": managedHardware,
+  Firewall: managedHardware,
   "Router / security gateway": managedHardware,
   "Firewall / NGFW": managedHardware,
   "VPN service": {
@@ -92,6 +94,7 @@ const profiles: Record<string, DeviceFieldProfile> = {
   "Network storage": managedHardware,
   "Network video recorder": managedHardware,
   Printer: managedHardware,
+  "POS terminal": managedHardware,
   "Client group": {
     service: false,
     manufacturerModel: false,

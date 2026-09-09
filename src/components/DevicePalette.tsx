@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   Box,
   Cable,
+  CreditCard,
   Cloud,
   EthernetPort,
   Laptop,
@@ -34,6 +35,31 @@ export interface DeviceTemplate {
 }
 const templates: DeviceTemplate[] = [
   {
+    name: "POS terminal",
+    deviceType: "POS terminal",
+    searchTerms: "point of sale EFTPOS payment card reader till checkout",
+    connectionType: "Ethernet",
+    notes: "Record the terminal model, IP address, physical location and connected switch port.",
+    icon: CreditCard,
+    group: "Endpoints",
+  },
+  {
+    name: "DSL modem",
+    deviceType: "Modem",
+    connectionType: "DSL / Ethernet",
+    notes: "Record the DSL model and bridge mode.",
+    icon: Router,
+    group: "Network edge",
+  },
+  {
+    name: "Management controller",
+    deviceType: "Management controller",
+    connectionType: "Ethernet",
+    notes: "Record the software and host device.",
+    icon: Server,
+    group: "Network edge",
+  },
+  {
     name: "Internet service",
     deviceType: "Internet service",
     connectionType: "WAN / NBN",
@@ -52,39 +78,23 @@ const templates: DeviceTemplate[] = [
     group: "Network edge",
   },
   {
-    name: "Router / WAP",
-    deviceType: "Router",
-    searchTerms: "wireless router WAP AP access point",
+    name: "Router / Gateway",
+    deviceType: "Router / Gateway",
+    searchTerms: "wireless router WAP AP security gateway ER605 VPN NAT DHCP",
     connectionType: "WAN / Ethernet",
-    notes: "Record gateway, DHCP, DNS, firmware and routing configuration.",
+    notes:
+      "Routes traffic between networks. Record routing, DHCP, firewall and VPN settings. For built-in Wi-Fi, select Router + wireless access point in Operating mode.",
     icon: Router,
     group: "Network edge",
   },
   {
-    name: "Router / security gateway",
-    deviceType: "Router / security gateway",
+    name: "Firewall",
+    deviceType: "Firewall",
+    searchTerms: "NGFW next-generation firewall security appliance VPN",
     connectionType: "WAN / Ethernet / VPN",
     notes:
-      "For one appliance that provides routing, NAT, firewall and VPN functions, such as a TP-Link Omada ER605.",
-    icon: Router,
-    group: "Network edge",
-  },
-  {
-    name: "Firewall / NGFW",
-    deviceType: "Firewall / NGFW",
-    connectionType: "WAN / Ethernet / VPN",
-    notes:
-      "For a dedicated firewall or next-generation firewall appliance. Record security services, policies, logging and VPN capability.",
+      "Dedicated firewall appliance. Record model, security features, policies, logging and VPN capability.",
     icon: Shield,
-    group: "Network edge",
-  },
-  {
-    name: "VPN connection",
-    deviceType: "VPN service",
-    connectionType: "WireGuard / IPsec",
-    notes:
-      "Record tunnel endpoints, purpose and routing. Do not store credentials or private keys.",
-    icon: Radio,
     group: "Network edge",
   },
   {

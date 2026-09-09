@@ -1,3 +1,8 @@
+import { RemoteOfficeNode } from "./RemoteOfficeNode";
+import type { Site, SiteRelationship } from "../types";
+import { CabinetGroups } from "./CabinetGroups";
+import type { Cabinet } from "../types";
+import { TOPOLOGY_GRID, snapTopologyPosition } from "../data/topologyGrid";
 import {
   useEffect,
   useRef,
@@ -19,6 +24,7 @@ import {
   ReactFlow,
   getBezierPath,
   useNodesState,
+  useUpdateNodeInternals,
   type Connection,
   type EdgeProps,
   type NodeProps,
@@ -26,6 +32,7 @@ import {
 } from "@xyflow/react";
 import {
   Cable,
+  CreditCard,
   AlertTriangle,
   CircleHelp,
   EthernetPort,
@@ -61,6 +68,7 @@ import "./Topology.css";
 
 const iconFor = (type: string) => {
   const t = type.toLowerCase();
+  if (t === "pos terminal") return CreditCard;
   if (t.includes("firewall")) return Shield;
   if (t.includes("wifi") || t.includes("wireless")) return Wifi;
   if (t.includes("router")) return Router;
@@ -88,11 +96,13 @@ type QuickAddData = NetworkDevice & {
 
 function DeviceNode({ data }: NodeProps<TopologyNode>) {
   const displayType =
-    data.operatingMode === "Access point only"
-      ? "Wireless access point"
-      : data.operatingMode === "Router + wireless access point"
-        ? "Router / wireless access point"
-        : data.deviceType;
+    data.operatingMode === "Modem / bridge only"
+      ? "DSL modem / bridge"
+      : data.operatingMode === "Access point only"
+        ? "Wireless access point"
+        : data.operatingMode === "Router + wireless access point"
+          ? "Router / wireless access point"
+          : data.deviceType;
   const Icon = iconFor(displayType);
   const description = [
     data.deviceType === "Internet service"
@@ -176,7 +186,7 @@ function DeviceNode({ data }: NodeProps<TopologyNode>) {
   );
 }
 
-const nodeTypes = { networkDevice: DeviceNode };
+const nodeTypes = { networkDevice: DeviceNode, remoteOffice: RemoteOfficeNode };
 function ConnectionEdge({
   id,
   sourceX,
@@ -218,7 +228,7 @@ function ConnectionEdge({
         onMouseEnter={show}
         onMouseLeave={hide}
       />
-      {(data?.label || showActions) && (
+      {showActions && (
         <EdgeLabelRenderer>
           <div
             className="edge-overlay"
@@ -228,13 +238,6 @@ function ConnectionEdge({
             onMouseEnter={show}
             onMouseLeave={hide}
           >
-            {data?.label && (
-              <span
-                className={`edge-label edge-label-${data.state.toLowerCase()}`}
-              >
-                {data.label}
-              </span>
-            )}
             {showActions && (
               <button
                 className="edge-delete"
@@ -258,7 +261,34 @@ function ConnectionEdge({
   );
 }
 const edgeTypes = { networkConnection: ConnectionEdge };
+
+function RefreshConnectionHandles({ devices, relationships }: {
+  devices: NetworkDevice[];
+  relationships: SiteRelationship[];
+}) {
+  const updateNodeInternals = useUpdateNodeInternals();
+  useEffect(() => {
+    // Node state is synchronised by the parent effect. Wait for that commit
+    // before looking up DOM nodes, including newly inserted devices.
+    const frame = requestAnimationFrame(() => {
+      updateNodeInternals([
+        ...devices.map((device) => device.id),
+        ...relationships.map((relationship) => `__office_link__${relationship.id}`),
+      ]);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [devices, relationships, updateNodeInternals]);
+  return null;
+}
 interface Props {
+  onEditRelationship?: (id: string) => void;
+  siteId: string;
+  sites: Site[];
+  relationships: SiteRelationship[];
+  onOpenSite: (id: string) => void;
+  cabinets: Cabinet[];
+  allDevices: NetworkDevice[];
+  showCabinets: boolean;
   devices: NetworkDevice[];
   connections: NetworkConnection[];
   onDeviceClick: (id: string) => void;
@@ -274,6 +304,14 @@ interface Props {
   onCleanUp: () => void;
 }
 export function Topology({
+  siteId,
+  sites,
+  relationships,
+  onOpenSite,
+  onEditRelationship,
+  cabinets,
+  allDevices,
+  showCabinets,
   devices,
   connections,
   onDeviceClick,
@@ -286,6 +324,51 @@ export function Topology({
   onAddAt,
   onCleanUp,
 }: Props) {
+  const draggingRef = useRef(false);
+  const changeDragState = (dragging: boolean) => {
+    draggingRef.current = dragging;
+    onDragStateChange(dragging);
+  };
+  const remoteLinks = relationships.filter(
+    (r) =>
+      r.status !== "Removed" &&
+      (r.sourceSiteId === siteId || r.targetSiteId === siteId),
+  );
+  const remoteId = (r: SiteRelationship) => `__office_link__${r.id}`;
+  const remoteNodes: TopologyNode[] = remoteLinks.map((r, i) => {
+    const otherId = r.sourceSiteId === siteId ? r.targetSiteId : r.sourceSiteId;
+    return {
+      id: remoteId(r),
+      type: "remoteOffice",
+      draggable: false,
+      selectable: false,
+      connectable: false,
+      position: {
+        x: Math.max(0, ...devices.map((d) => d.position.x)) + 384,
+        y: Math.min(0, ...devices.map((d) => d.position.y)) + i * 192,
+      },
+      data: {
+        id: remoteId(r),
+        hostname:
+          sites.find((s) => s.id === otherId)?.name ?? "Office unavailable",
+        deviceType: "Remote office",
+        manufacturer: "",
+        model: r.technology,
+        notes: r.tunnel?.routing ?? "Endpoints not documented",
+        state: r.state,
+        status: r.status,
+        physicalLocation: "",
+        connectionType: "VPN",
+        managementIp: "",
+        subnetVlan: "",
+        macAddress: "",
+        serialNumber: "",
+        switchPort: "",
+        lastVerified: "",
+        position: { x: 0, y: 0 },
+      },
+    };
+  });
   const incomingNodes: TopologyNode[] = devices.map((d) => ({
     id: d.id,
     type: "networkDevice",
@@ -300,8 +383,10 @@ export function Topology({
       })(),
     } as NetworkDevice,
   }));
-  const [nodes, setNodes, onNodesChange] =
-    useNodesState<TopologyNode>(incomingNodes);
+  const [nodes, setNodes, onNodesChange] = useNodesState<TopologyNode>([
+    ...incomingNodes,
+    ...remoteNodes,
+  ]);
   const [instance, setInstance] = useState<ReactFlowInstance<
       TopologyNode,
       TopologyEdge
@@ -312,15 +397,25 @@ export function Topology({
       position: { x: number; y: number };
     } | null>(null);
   useEffect(() => {
+    // React Flow owns live positions until drop. Parent renders (including
+    // save-status updates) must not replace them with persisted positions.
+    if (draggingRef.current) return;
     setNodes((current) =>
-      incomingNodes.map((incoming) => {
+      [...incomingNodes, ...remoteNodes].map((incoming) => {
         const existing = current.find((node) => node.id === incoming.id);
         return existing
-          ? { ...incoming, selected: existing.selected }
+          ? {
+              ...incoming,
+              // React Flow hides nodes without measurements. Keep these across
+              // parent renders; ResizeObserver updates them when content changes.
+              measured: existing.measured,
+              selected: existing.selected,
+              dragging: existing.dragging,
+            }
           : incoming;
       }),
     );
-  }, [devices, setNodes]);
+  }, [devices, relationships, siteId, sites, setNodes]);
   useEffect(() => {
     if (!contextMenu) return;
     const close = (event: KeyboardEvent) => {
@@ -370,7 +465,13 @@ export function Topology({
         ?.closest<HTMLElement>(".react-flow__node"),
       targetNodeId = targetElement?.dataset.id,
       sourceNodeId = connectionState.fromNode.id;
-    if (!targetNodeId || targetNodeId === sourceNodeId) return;
+    if (
+      !targetNodeId ||
+      targetNodeId === sourceNodeId ||
+      !devices.some((d) => d.id === targetNodeId) ||
+      !devices.some((d) => d.id === sourceNodeId)
+    )
+      return;
     const startedFromTarget = connectionState.fromHandle?.type === "target";
     onConnect({
       source: startedFromTarget ? targetNodeId : sourceNodeId,
@@ -381,9 +482,31 @@ export function Topology({
   };
   return (
     <div className="topology-canvas">
-      <ReactFlow
+      <ReactFlow<TopologyNode, TopologyEdge>
         nodes={nodes}
-        edges={edges}
+        edges={[
+          ...edges,
+          ...remoteLinks.flatMap((r) => {
+            const gateway =
+              r.sourceSiteId === siteId
+                ? r.tunnel?.sourceGatewayId
+                : r.tunnel?.targetGatewayId;
+            return gateway && devices.some((d) => d.id === gateway)
+              ? [
+                  {
+                    id: remoteId(r),
+                    source: gateway,
+                    target: remoteId(r),
+                    type: "default",
+                    animated: r.state === "Future",
+                    style: { stroke: "#92a9d4", strokeDasharray: "6 5" },
+                    deletable: false,
+                    selectable: false,
+                  },
+                ]
+              : [];
+          }),
+        ]}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
@@ -391,8 +514,8 @@ export function Topology({
         fitViewOptions={{ padding: 0.18, minZoom: 0.5 }}
         minZoom={0.5}
         maxZoom={1.8}
-        snapToGrid
-        snapGrid={[24, 24]}
+        snapToGrid={false}
+        snapGrid={TOPOLOGY_GRID}
         nodesConnectable
         selectionMode={SelectionMode.Partial}
         selectionKeyCode="Shift"
@@ -410,27 +533,65 @@ export function Topology({
           setContextMenu({
             left: Math.min(event.clientX - bounds.left, bounds.width - 180),
             top: Math.min(event.clientY - bounds.top, bounds.height - 88),
-            position: instance.screenToFlowPosition({
-              x: event.clientX,
-              y: event.clientY,
-            }),
+            position: snapTopologyPosition(
+              instance.screenToFlowPosition(
+                {
+                  x: event.clientX,
+                  y: event.clientY,
+                },
+                { snapToGrid: false },
+              ),
+            ),
           });
         }}
-        onNodeClick={(_, n) => onDeviceClick(n.id)}
-        onEdgeClick={(_, e) => onConnectionClick(e.id)}
-        onNodeDragStart={() => onDragStateChange(true)}
+        onNodeClick={(_, n) => {
+          const link = remoteLinks.find((r) => remoteId(r) === n.id);
+          if (link)
+            onOpenSite(
+              link.sourceSiteId === siteId
+                ? link.targetSiteId
+                : link.sourceSiteId,
+            );
+          else onDeviceClick(n.id);
+        }}
+        onEdgeClick={(_, e) => {
+          const link = remoteLinks.find((r) => remoteId(r) === e.id);
+          if (link) onEditRelationship?.(link.id);
+          else onConnectionClick(e.id);
+        }}
+        onNodeDragStart={() => changeDragState(true)}
         onNodeDragStop={(_, node, draggedNodes) => {
           onMoveMany(
             (draggedNodes.length ? draggedNodes : [node]).map((item) => ({
               id: item.id,
-              position: item.position,
+              position: snapTopologyPosition(item.position),
             })),
           );
-          onDragStateChange(false);
+          changeDragState(false);
         }}
         colorMode="dark"
       >
-        <Background color="#24271f" gap={24} />
+        <RefreshConnectionHandles devices={devices} relationships={relationships} />
+        {showCabinets && (
+          <CabinetGroups
+            cabinets={cabinets}
+            nodes={nodes}
+            allDevices={allDevices}
+            onPreview={(moves) => {
+              const positions = new Map(moves.map((m) => [m.id, m.position]));
+              setNodes((current) =>
+                current.map((n) =>
+                  positions.has(n.id)
+                    ? { ...n, position: positions.get(n.id)! }
+                    : n,
+                ),
+              );
+            }}
+            onCommit={onMoveMany}
+            onDragStateChange={changeDragState}
+          />
+        )}
+        <Background color="#24271f" gap={TOPOLOGY_GRID[0]} />
         <MiniMap
           pannable
           zoomable

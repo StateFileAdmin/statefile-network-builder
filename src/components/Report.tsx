@@ -1,3 +1,4 @@
+import { physicalLocationLabel } from "../data/infrastructure";
 import type { Site } from "../types";
 import {
   connectionIsDisconnected,
@@ -15,11 +16,13 @@ import "./ReportTopology.css";
 const clip = (value: string, length = 28) =>
   value.length > length ? `${value.slice(0, length - 1)}…` : value;
 const displayDeviceType = (device: Site["devices"][number]) =>
-  device.operatingMode === "Access point only"
-    ? "Wireless access point"
-    : device.operatingMode === "Router + wireless access point"
-      ? "Router / wireless access point"
-      : device.deviceType;
+  device.operatingMode === "Modem / bridge only"
+    ? "DSL modem / bridge"
+    : device.operatingMode === "Access point only"
+      ? "Wireless access point"
+      : device.operatingMode === "Router + wireless access point"
+        ? "Router / wireless access point"
+        : device.deviceType;
 function ReportTopology({ site }: { site: Site }) {
   const devices = site.devices.filter((d) => d.status !== "Removed"),
     ids = new Set(devices.map((d) => d.id)),
@@ -327,7 +330,7 @@ export function ManagementReport({
                       : [d.manufacturer, d.model].filter(Boolean).join(" · ") ||
                         "Not recorded"}
                 </td>
-                <td>{d.physicalLocation || "Not recorded"}</td>
+                <td>{physicalLocationLabel(d, site.cabinets)}</td>
                 <td>
                   <StatusBadge status={d.status} />
                 </td>
@@ -363,6 +366,123 @@ export function ManagementReport({
           </tbody>
         </table>
       </section>
+      {site.devices.some(
+        (d) =>
+          d.physicalPorts?.length ||
+          d.firewall ||
+          d.vpn ||
+          d.securityFeatures ||
+          d.wanInterfaces?.length ||
+          d.hostDeviceId ||
+          d.controllerDeviceId,
+      ) && (
+        <section>
+          <h2>Device configuration</h2>
+          {site.devices
+            .filter(
+              (d) =>
+                d.physicalPorts?.length ||
+                d.firewall ||
+                d.vpn ||
+                d.securityFeatures ||
+                d.wanInterfaces?.length ||
+                d.hostDeviceId ||
+                d.controllerDeviceId,
+            )
+            .map((d) => (
+              <div key={d.id}>
+                <h3>{d.hostname}</h3>
+                {(["firewall", "vpn"] as const).map(
+                  (key) =>
+                    d[key] && (
+                      <p key={key}>
+                        <b>{key === "firewall" ? "Firewall" : "VPN"}:</b>{" "}
+                        {d[key]?.status} · Last verified:{" "}
+                        {d[key]?.lastVerified || "Not documented"}
+                      </p>
+                    ),
+                )}
+                {d.wanInterfaces?.map((w, i) => (
+                  <p key={i}>
+                    <b>WAN {i + 1}:</b> {w.method} · {w.role}
+                    {w.vlanId ? ` · VLAN ${w.vlanId}` : ""}
+                  </p>
+                ))}
+                {d.hostDeviceId && (
+                  <p>
+                    <b>Host:</b>{" "}
+                    {site.devices.find((x) => x.id === d.hostDeviceId)
+                      ?.hostname || "Not recorded"}
+                  </p>
+                )}
+                {d.controllerDeviceId && (
+                  <p>
+                    <b>Controller:</b>{" "}
+                    {site.devices.find((x) => x.id === d.controllerDeviceId)
+                      ?.hostname || "Not recorded"}
+                  </p>
+                )}
+                {Object.entries(d.securityFeatures ?? {}).map(([key, f]) => (
+                  <p key={key}>
+                    <b>
+                      {{
+                        ids: "IDS",
+                        ips: "IPS",
+                        webFiltering: "Web filtering",
+                        httpsInspection: "HTTPS inspection",
+                      }[key] ?? key}
+                      :
+                    </b>{" "}
+                    {f.status} · Last verified:{" "}
+                    {f.lastVerified || "Not documented"}
+                  </p>
+                ))}
+                {d.securityLicenceExpiry && (
+                  <p>
+                    <b>Security licence expiry:</b> {d.securityLicenceExpiry}
+                  </p>
+                )}
+                {!!d.physicalPorts?.length && (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Port</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Connected device</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {d.physicalPorts.map((p) => (
+                        <tr key={p.id}>
+                          <td>{p.label || "Unnamed port"}</td>
+                          <td>{p.role}</td>
+                          <td>{p.enabled ? "Enabled" : "Disabled"}</td>
+                          <td>
+                            {site.connections
+                              .filter(
+                                (c) =>
+                                  c.status !== "Removed" &&
+                                  ((c.source === d.id &&
+                                    c.sourcePortId === p.id) ||
+                                    (c.target === d.id &&
+                                      c.targetPortId === p.id)),
+                              )
+                              .map(
+                                (c) =>
+                                  `${site.devices.find((other) => other.id === (c.source === d.id ? c.target : c.source))?.hostname || "Unknown"} (${c.state})`,
+                              )
+                              .join(", ") || "Not assigned"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            ))}
+        </section>
+      )}
       <div className="report-columns">
         <section>
           <h2>Unverified items</h2>

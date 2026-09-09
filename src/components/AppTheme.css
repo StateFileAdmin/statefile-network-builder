@@ -1132,3 +1132,165 @@ td {
     flex-direction: column;
   }
 }
+
+.physical-port-record {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  margin: 12px 0;
+}
+.physical-port-record legend {
+  font-weight: 600;
+  padding: 0 6px;
+}
+.physical-port-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+.form-help {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 8px 0;
+}
+
+.device-configuration-section {
+  margin-top: 20px;
+}
+
+/* Physical organisation shares the diagram's devices and coordinates. */
+.cabinet-enclosure {
+  position: absolute;
+  border: 2px dashed #7496af80;
+  border-radius: 24px;
+  background: #4c759b0a;
+  pointer-events: none;
+}
+.cabinet-group-handle {
+  position: absolute;
+  left: 16px;
+  top: 8px;
+  max-width: calc(100% - 32px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+  border: 0;
+  background: #18232e;
+  color: #c3d8eb;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12px;
+}
+.cabinet-group-handle:active {
+  cursor: grabbing;
+}
+.cabinet-group-handle span {
+  margin-left: 12px;
+  color: #91a8bb;
+}
+.cabinet-manager {
+  width: min(860px, calc(100vw - 32px));
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+.cabinet-manager-body {
+  overflow: auto;
+  padding: 20px;
+  display: grid;
+  gap: 18px;
+}
+.cabinet-manager .form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.cabinet-manager label,
+.infrastructure-editor label {
+  display: grid;
+  gap: 6px;
+}
+.cabinet-manager input,
+.infrastructure-editor input,
+.infrastructure-editor textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.cabinet-equipment {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+.cabinet-equipment button {
+  text-align: left;
+  display: grid;
+  gap: 4px;
+}
+.cabinet-equipment small {
+  color: var(--muted, #9ba5b5);
+}
+.infrastructure-editor summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.infrastructure-editor[open] > * + * {
+  margin-top: 16px;
+}
+.infrastructure-feature {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #ffffff15;
+  border-radius: 10px;
+}
+@media (max-width: 600px) {
+  .cabinet-manager .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tunnel-editor {
+  border: 1px solid #ffffff20;
+  border-radius: 12px;
+  padding: 16px;
+  min-width: 0;
+}
+.tunnel-editor .form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.relationship-modal {
+  max-height: 90vh;
+  overflow: auto;
+}
+.remote-office-node {
+  display: grid;
+  gap: 8px;
+  border-style: dashed;
+  cursor: pointer;
+  padding: 16px;
+}
+.remote-office-action {
+  color: #92a9d4;
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .tunnel-editor .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.wan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}

@@ -1,3 +1,8 @@
+import { RelationshipModal } from "./components/Dashboard";
+import { clearMissingGateways } from "./data/siteLinks";
+import { CabinetManager } from "./components/CabinetManager";
+import { snapTopologyPosition } from "./data/topologyGrid";
+import { normaliseDeviceTypes } from "./data/deviceTypes";
 import { useEffect, useRef, useState } from "react";
 import type { Connection } from "@xyflow/react";
 import {
@@ -82,7 +87,7 @@ const blankDevice = (): NetworkDevice => ({
   status: "Needs Verification",
   state: "Current",
   lifecycle: "Active",
-  position: { x: 300, y: 250 },
+  position: snapTopologyPosition({ x: 300, y: 250 }),
 });
 const defaultDeviceName = (
   template: DeviceTemplate,
@@ -100,82 +105,7 @@ const defaultDeviceName = (
   while (used.has(number)) number += 1;
   return `AP-${String(number).padStart(2, "0")}`;
 };
-const normaliseDeviceTypes = (register: NetworkRegister) => {
-  let changed = false;
-  const sites = register.sites.map((site) => ({
-    ...site,
-    devices: site.devices.map((device) => {
-      const type = device.deviceType.trim().toLowerCase(),
-        legacyType = type === "wireless network",
-        legacyCombinedRouter =
-          type.includes("router") &&
-          (type.includes("wi-fi") ||
-            type.includes("wifi") ||
-            type.includes("wireless")),
-        normalisedType = legacyType
-          ? "Wireless access point"
-          : legacyCombinedRouter
-            ? "Router"
-            : device.deviceType,
-        operatingMode =
-          device.operatingMode ??
-          (normalisedType === "Router"
-            ? legacyCombinedRouter
-              ? "Router + wireless access point"
-              : "Router only"
-            : undefined),
-        isInternetService = normalisedType === "Internet service",
-        serviceProvider = isInternetService
-          ? device.serviceProvider?.trim() || device.manufacturer
-          : device.serviceProvider,
-        serviceType = isInternetService
-          ? device.serviceType?.trim() || device.model
-          : device.serviceType,
-        needsServiceMigration =
-          isInternetService &&
-          (serviceProvider !== device.serviceProvider ||
-            serviceType !== device.serviceType ||
-            Boolean(device.manufacturer || device.model));
-      if (
-        !legacyType &&
-        !legacyCombinedRouter &&
-        operatingMode === device.operatingMode &&
-        !needsServiceMigration
-      )
-        return device;
-      changed = true;
-      return {
-        ...device,
-        deviceType: normalisedType,
-        operatingMode,
-        serviceProvider,
-        serviceType,
-        manufacturer: isInternetService ? "" : device.manufacturer,
-        model: isInternetService ? "" : device.model,
-      };
-    }),
-  }));
-  const normalisedSites = sites.map((site) => ({
-    ...site,
-    connections: site.connections.map((connection) => {
-      const source = site.devices.find(
-          (device) => device.id === connection.source,
-        ),
-        target = site.devices.find((device) => device.id === connection.target),
-        status = connectionStatusFor(source, target, connection.status);
-      if (status === connection.status) return connection;
-      changed = true;
-      return { ...connection, status };
-    }),
-  }));
-  return changed
-    ? {
-        ...register,
-        sites: normalisedSites,
-        updatedAt: new Date().toISOString(),
-      }
-    : register;
-};
+
 const readRoute = () => {
   const parts = window.location.hash.slice(1).split("/"),
     views: View[] = ["topology", "assets", "ip-plan", "report"];
@@ -198,6 +128,11 @@ const readRoute = () => {
   };
 };
 export function App() {
+  const [editingRelationship, setEditingRelationship] = useState<string | null>(
+    null,
+  );
+  const [cabinetsOpen, setCabinetsOpen] = useState(false),
+    [showCabinets, setShowCabinets] = useState(true);
   const initialRoute = useRef(readRoute()).current;
   const [register, setRegister] = useState<NetworkRegister | null>(null),
     [siteId, setSiteId] = useState(initialRoute.siteId),
@@ -258,7 +193,7 @@ export function App() {
       if (error instanceof ConflictError) {
         versionRef.current = error.latest.version;
         syncedRef.current = error.latest.register;
-        setRegister(error.latest.register);
+        setRegister(normaliseDeviceTypes(error.latest.register));
         setSync("idle");
         setActionDialog({
           title: "A newer version was saved",
@@ -378,11 +313,13 @@ export function App() {
       connections: visibleConnections,
     };
   const updateSite = (fn: (s: Site) => Site) =>
-    setRegister({
-      ...register,
-      updatedAt: new Date().toISOString(),
-      sites: register.sites.map((s) => (s.id === site.id ? fn(s) : s)),
-    });
+    setRegister(
+      clearMissingGateways({
+        ...register,
+        updatedAt: new Date().toISOString(),
+        sites: register.sites.map((s) => (s.id === site.id ? fn(s) : s)),
+      }),
+    );
   const cleanUpTopology = () => {
     updateSite((current) => {
       const ids = new Set(current.devices.map((device) => device.id)),
@@ -500,6 +437,22 @@ export function App() {
     window.setTimeout(() => setNotice(""), 2200);
   }
   const saveDevice = (device: NetworkDevice) => {
+    // Port edits must not leave an invalid reference in WAN documentation.
+    if (device.wanInterfaces)
+      device = {
+        ...device,
+        wanInterfaces: device.wanInterfaces.map((w) =>
+          w.portId &&
+          !device.physicalPorts?.some(
+            (p) =>
+              p.id === w.portId &&
+              p.enabled &&
+              ["WAN", "WAN/LAN", "DSL"].includes(p.role),
+          )
+            ? { ...w, portId: "" }
+            : w,
+        ),
+      };
     updateSite((s) => {
       const devices = s.devices.some((d) => d.id === device.id)
         ? s.devices.map((d) => (d.id === device.id ? device : d))
@@ -528,7 +481,17 @@ export function App() {
       onConfirm: () => {
         updateSite((s) => ({
           ...s,
-          devices: s.devices.filter((device) => device.id !== id),
+          devices: s.devices
+            .filter((device) => device.id !== id)
+            .map((device) => ({
+              ...device,
+              hostDeviceId:
+                device.hostDeviceId === id ? undefined : device.hostDeviceId,
+              controllerDeviceId:
+                device.controllerDeviceId === id
+                  ? undefined
+                  : device.controllerDeviceId,
+            })),
           connections: s.connections.filter(
             (connection) =>
               connection.source !== id && connection.target !== id,
@@ -569,11 +532,16 @@ export function App() {
       d: NetworkDevice = template
         ? {
             ...base,
-            position: pendingPosition ?? base.position,
+            position: snapTopologyPosition(pendingPosition ?? base.position),
             hostname: defaultDeviceName(template, site.devices),
             deviceType: template.deviceType,
             operatingMode:
-              template.deviceType === "Router" ? "Router only" : undefined,
+              template.deviceType === "Modem"
+                ? "Modem / bridge only"
+                : template.deviceType === "Router / Gateway" ||
+                    template.deviceType === "Router"
+                  ? "Router only"
+                  : undefined,
             connectionType: template.connectionType,
             notes: "",
             state: template.state || "Current",
@@ -589,7 +557,7 @@ export function App() {
   };
   const openDeviceMenu = (position?: { x: number; y: number }) => {
     setPendingAttachment(null);
-    setPendingPosition(position ?? null);
+    setPendingPosition(position ? snapTopologyPosition(position) : null);
     setPaletteOpen(true);
   };
   const openAttachedDeviceMenu = (
@@ -639,11 +607,16 @@ export function App() {
       };
     const device: NetworkDevice = {
         ...blankDevice(),
-        position,
+        position: snapTopologyPosition(position),
         hostname: defaultDeviceName(template, site.devices),
         deviceType: template.deviceType,
         operatingMode:
-          template.deviceType === "Router" ? "Router only" : undefined,
+          template.deviceType === "Modem"
+            ? "Modem / bridge only"
+            : template.deviceType === "Router / Gateway" ||
+                template.deviceType === "Router"
+              ? "Router only"
+              : undefined,
         connectionType: template.connectionType,
         notes: "",
         state: template.state || "Current",
@@ -1026,6 +999,13 @@ export function App() {
                 <button onClick={() => openDeviceMenu()}>
                   <Plus size={16} /> Add device
                 </button>
+                <button onClick={() => setCabinetsOpen(true)}>Cabinets</button>
+                <button
+                  aria-pressed={showCabinets}
+                  onClick={() => setShowCabinets(!showCabinets)}
+                >
+                  {showCabinets ? "Hide" : "Show"} cabinet groups
+                </button>
               </>
             )}
           </nav>
@@ -1052,6 +1032,16 @@ export function App() {
                 </div>
                 {visibleSite.devices.length ? (
                   <Topology
+                    cabinets={site.cabinets ?? []}
+                    allDevices={site.devices}
+                    showCabinets={showCabinets}
+                    siteId={site.id}
+                    sites={register.sites}
+                    relationships={register.siteRelationships ?? []}
+                    onEditRelationship={
+                      isAdmin ? setEditingRelationship : undefined
+                    }
+                    onOpenSite={openSite}
                     devices={visibleSite.devices}
                     connections={visibleSite.connections}
                     onDeviceClick={(id) => setSelection({ kind: "device", id })}
@@ -1132,7 +1122,10 @@ export function App() {
       )}
       {selectedDevice && (
         <Drawer
+          devices={site.devices}
+          connections={site.connections}
           kind="device"
+          cabinets={site.cabinets ?? []}
           value={selectedDevice}
           routingWarning={hasRoutingUpstream(
             selectedDevice.id,
@@ -1159,6 +1152,8 @@ export function App() {
       )}{" "}
       {selectedConnection && (
         <Drawer
+          devices={site.devices}
+          connections={site.connections}
           kind="connection"
           value={selectedConnection}
           deviceNames={Object.fromEntries(
@@ -1178,6 +1173,32 @@ export function App() {
           onClose={() => setSelection(null)}
         />
       )}{" "}
+      {editingRelationship &&
+        register.siteRelationships?.some(
+          (r) => r.id === editingRelationship,
+        ) && (
+          <RelationshipModal
+            relationship={register.siteRelationships.find(
+              (r) => r.id === editingRelationship,
+            )!}
+            sites={register.sites}
+            onClose={() => setEditingRelationship(null)}
+            onSave={(link) => {
+              saveSiteRelationship(link);
+              setEditingRelationship(null);
+            }}
+          />
+        )}
+      {cabinetsOpen && (
+        <CabinetManager
+          key={site.id}
+          site={site}
+          canDelete={isAdmin}
+          onChange={(next) => updateSite(() => next)}
+          onClose={() => setCabinetsOpen(false)}
+          onDevice={(id) => setSelection({ kind: "device", id })}
+        />
+      )}
       {paletteOpen && (
         <DevicePalette
           onAdd={(template) =>
@@ -1195,6 +1216,7 @@ export function App() {
       {historyOpen && (
         <PublicationHistoryDialog
           site={site}
+          canDelete={isAdmin}
           canRestore={isAdmin && isCloudMode}
           onClose={() => setHistoryOpen(false)}
           onRestored={() => window.location.reload()}

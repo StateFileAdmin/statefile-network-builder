@@ -1,3 +1,4 @@
+import { clearMissingGateways } from "./data/siteLinks";
 import { seedRegister } from "./data/seed";
 import {
   isNetworkRegister,
@@ -126,7 +127,8 @@ function applyPermissions(
     if (
       !containsAllIds(before.devices, after.devices) ||
       !containsAllIds(before.connections, after.connections) ||
-      !containsAllIds(before.ipPlan, after.ipPlan)
+      !containsAllIds(before.ipPlan, after.ipPlan) ||
+      !containsAllIds(before.cabinets ?? [], after.cabinets ?? [])
     )
       throw new Error("delete");
   }
@@ -174,10 +176,12 @@ async function writeRegister(
   if (current.version !== expectedVersion)
     return { conflict: true as const, ...toLoaded(current) };
 
-  const permitted = applyPermissions(
-    JSON.parse(current.document) as NetworkRegister,
-    register,
-    user,
+  const permitted = clearMissingGateways(
+    applyPermissions(
+      JSON.parse(current.document) as NetworkRegister,
+      register,
+      user,
+    ),
   );
   const version = current.version + 1;
   const updatedAt = new Date().toISOString();
@@ -327,7 +331,7 @@ export default {
         if (!siteId || !canAccessSite(user, siteId))
           return json({ error: "Not allowed." }, 403);
         const rows = await env.DB.prepare(
-          "SELECT id,register_version,release_note,published_at,published_by,ROW_NUMBER() OVER (ORDER BY id ASC) AS site_version FROM register_publication WHERE register_id=? AND site_id=? ORDER BY id DESC LIMIT 100",
+          "SELECT p.id,p.register_version,p.release_note,p.published_at,p.published_by,(SELECT COUNT(*) FROM register_publication p2 WHERE p2.register_id=p.register_id AND p2.site_id=p.site_id AND p2.id<=p.id) AS site_version FROM register_publication p WHERE p.register_id=? AND p.site_id=? AND p.document<>'' ORDER BY p.id DESC LIMIT 100",
         )
           .bind(REGISTER_ID, siteId)
           .all();
@@ -403,9 +407,28 @@ export default {
       const publicationMatch = url.pathname.match(
         /^\/api\/publications\/(\d+)$/,
       );
+      if (publicationMatch && request.method === "DELETE") {
+        if (user.role !== "admin")
+          return json(
+            { error: "Only administrators can delete publication history." },
+            403,
+          );
+        if (!requireCsrf(request, user))
+          return json({ error: "Cross-site writes are not allowed." }, 403);
+        // Retain only the numbering slot, never the deleted snapshot or metadata.
+        // Existing per-location version numbers and future numbers remain stable.
+        const result = await env.DB.prepare(
+          "UPDATE register_publication SET document='',release_note='',published_by='',published_at='',register_version=0 WHERE id=? AND register_id=? AND document<>''",
+        )
+          .bind(Number(publicationMatch[1]), REGISTER_ID)
+          .run();
+        if (!result.meta.changes)
+          return json({ error: "Published version not found." }, 404);
+        return json({ deleted: true });
+      }
       if (publicationMatch && request.method === "GET") {
         const publication = await env.DB.prepare(
-          "SELECT p.id,p.site_id,p.document,p.register_version,p.release_note,p.published_at,p.published_by,(SELECT COUNT(*) FROM register_publication p2 WHERE p2.register_id=p.register_id AND p2.site_id=p.site_id AND p2.id<=p.id) AS site_version FROM register_publication p WHERE p.id=? AND p.register_id=?",
+          "SELECT p.id,p.site_id,p.document,p.register_version,p.release_note,p.published_at,p.published_by,(SELECT COUNT(*) FROM register_publication p2 WHERE p2.register_id=p.register_id AND p2.site_id=p.site_id AND p2.id<=p.id) AS site_version FROM register_publication p WHERE p.id=? AND p.register_id=? AND p.document<>''",
         )
           .bind(Number(publicationMatch[1]), REGISTER_ID)
           .first<{
@@ -453,7 +476,7 @@ export default {
         if (!requireCsrf(request, user))
           return json({ error: "Cross-site writes are not allowed." }, 403);
         const publication = await env.DB.prepare(
-          "SELECT site_id,document FROM register_publication WHERE id=? AND register_id=?",
+          "SELECT site_id,document FROM register_publication WHERE id=? AND register_id=? AND document<>''",
         )
           .bind(Number(restoreMatch[1]), REGISTER_ID)
           .first<{ site_id: string; document: string }>();

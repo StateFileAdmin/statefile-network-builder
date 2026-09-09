@@ -1,0 +1,13 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),ts=require('typescript');
+const source=fs.readFileSync(path.join(__dirname,'../src/worker.ts'),'utf8')+'\nexport { applyPermissions };';
+const exportsObject={};vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:exportsObject,require:()=>({}),console});
+const {applyPermissions}=exportsObject;
+const site={id:'allowed',devices:[{id:'d'}],connections:[],ipPlan:[],cabinets:[{id:'cabinet',name:'Cabinet'}]};
+const current={schemaVersion:1,organisation:'Org',sites:[site,{...site,id:'private'}],siteRelationships:[{id:'vpn'}]};
+const staff={role:'staff',scopeAll:false,siteIds:['allowed']};
+const incoming={...current,sites:[site]};
+const updated=applyPermissions(current,incoming,staff);assert.equal(updated.sites[1],current.sites[1]);assert.equal(updated.siteRelationships,current.siteRelationships);
+assert.throws(()=>applyPermissions(current,{...incoming,sites:[{...site,cabinets:[]}]},staff),/delete/);
+assert.throws(()=>applyPermissions(current,{...incoming,sites:[{...site,id:'private'}]},staff),/permission/);
+assert.equal(applyPermissions(current,incoming,{role:'admin'}),incoming);
+console.log('PASS: staff cannot delete cabinets or modify inaccessible sites; hidden sites and relationships are preserved; administrator writes retained');

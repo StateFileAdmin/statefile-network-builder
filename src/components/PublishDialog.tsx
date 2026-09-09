@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Eye, History, RotateCcw, X } from "lucide-react";
+import { ArrowLeft, Eye, History, RotateCcw, Trash2, X } from "lucide-react";
 import type { Site } from "../types";
 import { authenticatedFetch } from "../data/storage";
 import { ActionDialog, type ActionDialogRequest } from "./ActionDialog";
@@ -19,11 +19,13 @@ type PublicationPreview = Publication & { site: Site };
 export function PublicationHistoryDialog({
   site,
   canRestore,
+  canDelete,
   onClose,
   onRestored,
 }: {
   site: Site;
   canRestore: boolean;
+  canDelete: boolean;
   onClose: () => void;
   onRestored: () => void;
 }) {
@@ -67,6 +69,30 @@ export function PublicationHistoryDialog({
       onRestored();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not restore.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async (item: Publication) => {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await authenticatedFetch(
+        `/api/publications/${item.id}`,
+        { method: "DELETE" },
+      );
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok)
+        throw new Error(data.error || "Could not delete this publication.");
+      setItems((current) => current.filter((entry) => entry.id !== item.id));
+      setPreview(null);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not delete this publication.",
+      );
     } finally {
       setBusy(false);
     }
@@ -193,6 +219,24 @@ export function PublicationHistoryDialog({
                   <p>{item.release_note || "No release note."}</p>
                 </div>
                 <div className="publication-actions">
+                  {canDelete && (
+                    <button
+                      className="quiet"
+                      disabled={busy}
+                      onClick={() =>
+                        setActionDialog({
+                          title: `Delete version ${item.site_version}?`,
+                          message: `Permanently delete the publication of ${site.name} from ${new Date(item.published_at).toLocaleString("en-AU")}. You will no longer be able to view or restore this checkpoint. The current diagram and other publications will stay unchanged.`,
+                          confirmLabel: "Delete publication",
+                          tone: "danger",
+                          onConfirm: () => remove(item),
+                        })
+                      }
+                    >
+                      <Trash2 size={14} /> Delete
+                    </button>
+                  )}
+
                   <button
                     className="quiet"
                     disabled={busy}

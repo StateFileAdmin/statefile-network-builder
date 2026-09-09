@@ -1,3 +1,6 @@
+import { useModalFocus } from "./useModalFocus";
+import { useRef } from "react";
+import { TunnelEditor } from "./TunnelEditor";
 import { useEffect, useState, type FormEvent } from "react";
 import {
   ArrowRight,
@@ -359,7 +362,7 @@ function SiteModal({
   );
 }
 
-function RelationshipModal({
+export function RelationshipModal({
   relationship,
   sites,
   onClose,
@@ -370,6 +373,8 @@ function RelationshipModal({
   onClose: () => void;
   onSave: (relationship: SiteRelationship) => void;
 }) {
+  const modalRef = useRef<HTMLFormElement>(null);
+  useModalFocus(modalRef, onClose);
   const [draft, setDraft] = useState(relationship);
   useEffect(() => setDraft(relationship), [relationship]);
   const siteOptions = sites.map((site) => ({
@@ -397,6 +402,10 @@ function RelationshipModal({
       }}
     >
       <form
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Site relationship"
         className="dashboard-modal relationship-modal"
         onSubmit={(event: FormEvent) => {
           event.preventDefault();
@@ -419,7 +428,15 @@ function RelationshipModal({
               label="Source site"
               value={draft.sourceSiteId}
               options={siteOptions}
-              onChange={(value) => setDraft({ ...draft, sourceSiteId: value })}
+              onChange={(value) =>
+                setDraft({
+                  ...draft,
+                  sourceSiteId: value,
+                  tunnel: draft.tunnel
+                    ? { ...draft.tunnel, sourceGatewayId: "" }
+                    : undefined,
+                })
+              }
             />
           </label>
           <label>
@@ -428,7 +445,15 @@ function RelationshipModal({
               label="Target site"
               value={draft.targetSiteId}
               options={siteOptions}
-              onChange={(value) => setDraft({ ...draft, targetSiteId: value })}
+              onChange={(value) =>
+                setDraft({
+                  ...draft,
+                  targetSiteId: value,
+                  tunnel: draft.tunnel
+                    ? { ...draft.tunnel, targetGatewayId: "" }
+                    : undefined,
+                })
+              }
             />
           </label>
           <label className="span-2">
@@ -483,6 +508,7 @@ function RelationshipModal({
               }
             />
           </label>
+          <TunnelEditor link={draft} sites={sites} onChange={setDraft} />
           {draft.sourceSiteId === draft.targetSiteId && (
             <p className="form-error span-2">Choose two different locations.</p>
           )}

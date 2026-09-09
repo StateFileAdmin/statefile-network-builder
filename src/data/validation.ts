@@ -1,3 +1,11 @@
+import { tunnelEndpointsValid } from "./siteLinks";
+import {
+  validInfrastructureDevice,
+  validCabinets,
+  validTunnel,
+  validPlacement,
+} from "./infrastructure";
+import { physicalPortAssignmentsValid } from "./physicalPorts";
 import type {
   InfrastructureState,
   DeviceLifecycle,
@@ -52,12 +60,37 @@ const portList = (value: unknown) =>
   value.length <= 96 &&
   value.every((item) => Number.isSafeInteger(item) && item >= 1 && item <= 96);
 
+const securityConfiguration = (value: unknown) =>
+  value === undefined ||
+  (object(value) &&
+    ["Not documented", "Enabled", "Disabled"].includes(String(value.status)) &&
+    text(value.details, 10000) &&
+    text(value.lastVerified, 50));
+const physicalPorts = (value: unknown) =>
+  value === undefined ||
+  (Array.isArray(value) &&
+    value.length <= 96 &&
+    value.every(
+      (p) =>
+        object(p) &&
+        requiredText(p.id, 200) &&
+        text(p.label, 100) &&
+        ["LAN", "WAN", "WAN/LAN", "Uplink", "DSL"].includes(String(p.role)) &&
+        typeof p.enabled === "boolean" &&
+        text(p.notes, 2000),
+    ) &&
+    new Set(value.map((p) => p.id)).size === value.length);
+
 function validDevice(value: unknown): value is NetworkDevice {
   return (
     object(value) &&
     requiredText(value.id, 200) &&
     requiredText(value.hostname) &&
     requiredText(value.deviceType) &&
+    validInfrastructureDevice(value) &&
+    physicalPorts(value.physicalPorts) &&
+    securityConfiguration(value.firewall) &&
+    securityConfiguration(value.vpn) &&
     text(value.manufacturer) &&
     text(value.model) &&
     (value.serviceProvider === undefined || text(value.serviceProvider)) &&
@@ -69,7 +102,8 @@ function validDevice(value: unknown): value is NetworkDevice {
     (value.operatingMode === undefined ||
       value.operatingMode === "Router only" ||
       value.operatingMode === "Router + wireless access point" ||
-      value.operatingMode === "Access point only") &&
+      value.operatingMode === "Access point only" ||
+      value.operatingMode === "Modem / bridge only") &&
     (value.quantity === undefined ||
       (typeof value.quantity === "number" &&
         Number.isSafeInteger(value.quantity) &&
@@ -112,6 +146,10 @@ function validConnection(value: unknown): value is NetworkConnection {
     requiredText(value.source, 200) &&
     requiredText(value.target, 200) &&
     text(value.label) &&
+    (value.sourcePortId === undefined ||
+      requiredText(value.sourcePortId, 200)) &&
+    (value.targetPortId === undefined ||
+      requiredText(value.targetPortId, 200)) &&
     text(value.connectionType) &&
     (value.removedAt === undefined || text(value.removedAt, 100)) &&
     (value.countsTowardPorts === undefined ||
@@ -140,6 +178,7 @@ export function validSite(value: unknown): value is Site {
   if (
     !object(value) ||
     !requiredText(value.id, 200) ||
+    !validCabinets(value.cabinets) ||
     !requiredText(value.name) ||
     !text(value.address, 2000) ||
     !text(value.description, 10000) ||
@@ -155,6 +194,9 @@ export function validSite(value: unknown): value is Site {
     !stringList(value.risks) ||
     !stringList(value.plannedImprovements)
   )
+    return false;
+  if (!validPlacement(value as unknown as Site)) return false;
+  if (!physicalPortAssignmentsValid(value.devices, value.connections))
     return false;
   const deviceIds = new Set(value.devices.map((device) => device.id));
   if (deviceIds.size !== value.devices.length) return false;
@@ -182,6 +224,7 @@ function validRelationship(value: unknown): value is SiteRelationship {
     requiredText(value.sourceSiteId, 200) &&
     requiredText(value.targetSiteId, 200) &&
     value.sourceSiteId !== value.targetSiteId &&
+    validTunnel(value.tunnel) &&
     requiredText(value.name) &&
     text(value.technology) &&
     text(value.notes, 10000) &&
@@ -218,7 +261,9 @@ export function isNetworkRegister(value: unknown): value is NetworkRegister {
       relationshipIds.size !== value.siteRelationships.length ||
       value.siteRelationships.some(
         (link) =>
-          !siteIds.has(link.sourceSiteId) || !siteIds.has(link.targetSiteId),
+          !siteIds.has(link.sourceSiteId) ||
+          !siteIds.has(link.targetSiteId) ||
+          !tunnelEndpointsValid(link, { sites: value.sites as Site[] }),
       )
     )
       return false;

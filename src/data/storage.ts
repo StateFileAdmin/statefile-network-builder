@@ -1,3 +1,4 @@
+import { normaliseDeviceTypes } from "./deviceTypes";
 import { seedRegister } from "./seed";
 import type { NetworkRegister } from "../types";
 import {
@@ -65,6 +66,7 @@ const apiRequest = async (path: string, init?: RequestInit) => {
   return response;
 };
 interface LocalPublication {
+  deleted?: boolean;
   id: number;
   site_id: string;
   register_version: number;
@@ -94,8 +96,39 @@ const localRequest = async (path: string, init?: RequestInit) => {
         .filter((item) => item.site_id === siteId)
         .sort((a, b) => a.id - b.id)
         .map((item, index) => ({ ...item, site_version: index + 1 }))
+        .filter((item) => !item.deleted)
         .reverse(),
     });
+  }
+  const publicationMatch = url.pathname.match(/^\/api\/publications\/(\d+)$/);
+  if (publicationMatch && init?.method === "DELETE") {
+    const items = localPublications(),
+      id = Number(publicationMatch[1]);
+    const item = items.find((p) => p.id === id && !p.deleted);
+    if (!item)
+      return Response.json(
+        { error: "Published version not found." },
+        { status: 404 },
+      );
+    localStorage.setItem(
+      PUBLICATIONS_KEY,
+      JSON.stringify(
+        items.map((p) =>
+          p.id === id
+            ? {
+                id: p.id,
+                site_id: p.site_id,
+                register_version: 0,
+                release_note: "",
+                published_at: "",
+                published_by: "",
+                deleted: true,
+              }
+            : p,
+        ),
+      ),
+    );
+    return Response.json({ deleted: true });
   }
   if (url.pathname === "/api/publications" && init?.method === "POST") {
     const body = JSON.parse(String(init.body)) as {
@@ -268,5 +301,5 @@ export function validateImport(value: unknown): NetworkRegister {
     throw new Error("Unsupported or invalid network register package.");
   if (registerByteLength(register) > MAX_REGISTER_BYTES)
     throw new Error("This register is too large to import safely.");
-  return register;
+  return normaliseDeviceTypes(register);
 }

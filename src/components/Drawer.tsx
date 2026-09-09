@@ -1,3 +1,10 @@
+import { placementIssue, reconcileWanPorts } from "../data/infrastructure";
+import { InfrastructureEditor } from "./InfrastructureEditor";
+import type { Cabinet } from "../types";
+import { DeviceConfiguration } from "./DeviceConfiguration";
+import { ConnectionPorts } from "./ConnectionPorts";
+import { usesPhysicalPort } from "../data/connectionTypes";
+import { isVpnConnection } from "../data/connectionTypes";
 import { useEffect, useState } from "react";
 import { AlertTriangle, ChevronDown, Trash2, X } from "lucide-react";
 import type {
@@ -35,6 +42,7 @@ const operatingModeOptions: DeviceOperatingMode[] = [
   "Router only",
   "Router + wireless access point",
   "Access point only",
+  "Modem / bridge only",
 ];
 const deviceLifecycle = (device: NetworkDevice): DeviceLifecycle =>
   device.lifecycle ??
@@ -45,7 +53,10 @@ const deviceLifecycle = (device: NetworkDevice): DeviceLifecycle =>
       : "Active");
 
 interface DeviceProps {
+  cabinets: Cabinet[];
   kind: "device";
+  devices: NetworkDevice[];
+  connections: NetworkConnection[];
   value: NetworkDevice;
   onSave: (value: NetworkDevice) => void;
   routingWarning?: boolean;
@@ -56,6 +67,8 @@ interface DeviceProps {
 }
 interface ConnectionProps {
   kind: "connection";
+  devices: NetworkDevice[];
+  connections: NetworkConnection[];
   value: NetworkConnection;
   deviceNames: Record<string, string>;
   portDeviceIds: string[];
@@ -105,12 +118,16 @@ export function Drawer(props: DeviceProps | ConnectionProps) {
 }
 
 function DeviceForm({
+  cabinets,
+  devices,
+  connections,
   value,
   onSave,
   routingWarning,
   portSummary,
   portDetails,
 }: DeviceProps) {
+  const [configurationError, setConfigurationError] = useState("");
   const [draft, setDraft] = useState(value),
     [detailsOpen, setDetailsOpen] = useState(false);
   useEffect(() => setDraft(value), [value]);
@@ -123,6 +140,13 @@ function DeviceForm({
         ? "Port / destination mapping"
         : "Switch / panel port";
   const change = (next: NetworkDevice) => {
+    next = reconcileWanPorts(next);
+    const issue = placementIssue(next, { devices, cabinets });
+    if (issue) {
+      setConfigurationError(issue);
+      return;
+    }
+    setConfigurationError("");
     setDraft(next);
     onSave(next);
   };
@@ -151,6 +175,11 @@ function DeviceForm({
   return (
     <form className="editor-form" onSubmit={(event) => event.preventDefault()}>
       <SensitiveDataNotice />
+      {configurationError && (
+        <p className="form-error" role="alert">
+          {configurationError}
+        </p>
+      )}
       {(value.deviceType === "Ethernet outlet" ||
         value.deviceType === "Managed switch" ||
         value.deviceType === "Unmanaged switch") &&
@@ -190,7 +219,9 @@ function DeviceForm({
             <span>Device type</span>
             <strong>{draft.deviceType}</strong>
           </div>
-          {draft.deviceType === "Router" && (
+          {["Router", "Router / Gateway", "Modem"].includes(
+            draft.deviceType,
+          ) && (
             <label className="span-2">
               <span>Operating mode</span>
               <CustomSelect
@@ -278,6 +309,12 @@ function DeviceForm({
             input("connectionType", "Connection type", true)}
         </div>
       </section>
+      <InfrastructureEditor
+        device={draft}
+        devices={devices}
+        cabinets={cabinets}
+        onSave={change}
+      />
       <button
         type="button"
         className={`editor-details-toggle ${detailsOpen ? "open" : ""}`}
@@ -407,6 +444,14 @@ function DeviceForm({
           </div>
         </section>
       )}
+      {profile.manufacturerModel && draft.deviceType !== "Patch panel" && (
+        <DeviceConfiguration
+          device={draft}
+          devices={devices}
+          connections={connections}
+          onChange={change}
+        />
+      )}
       <section className="editor-section editor-notes">
         <label>
           <span>Notes</span>
@@ -424,6 +469,8 @@ function DeviceForm({
 }
 
 function ConnectionForm({
+  devices,
+  connections,
   value,
   deviceNames,
   portDeviceIds,
@@ -436,12 +483,28 @@ function ConnectionForm({
     label,
   }));
   const change = (next: NetworkConnection) => {
-    setDraft(next);
-    onSave(next);
+    const updated = {
+      ...next,
+      sourcePortId:
+        next.source !== draft.source ||
+        !usesPhysicalPort(next) ||
+        next.state !== draft.state
+          ? undefined
+          : next.sourcePortId,
+      targetPortId:
+        next.target !== draft.target ||
+        !usesPhysicalPort(next) ||
+        next.state !== draft.state
+          ? undefined
+          : next.targetPortId,
+    };
+    setDraft(updated);
+    onSave(updated);
   };
   const canUsePhysicalPort =
-    portDeviceIds.includes(draft.source) ||
-    portDeviceIds.includes(draft.target);
+    !isVpnConnection(draft) &&
+    (portDeviceIds.includes(draft.source) ||
+      portDeviceIds.includes(draft.target));
   return (
     <form className="editor-form" onSubmit={(event) => event.preventDefault()}>
       <SensitiveDataNotice />
@@ -479,11 +542,22 @@ function ConnectionForm({
             <span>Connection type</span>
             <input
               value={draft.connectionType}
+              aria-label="Connection type"
               onChange={(event) =>
                 change({ ...draft, connectionType: event.target.value })
               }
             />
+            <small>
+              For a VPN, connect the two gateways and choose a VPN type. Use the
+              location dashboard for a VPN between sites.
+            </small>
           </label>
+          <ConnectionPorts
+            connection={draft}
+            devices={devices}
+            connections={connections}
+            onChange={change}
+          />
           {canUsePhysicalPort && (
             <label className="span-2">
               <span>Port usage</span>

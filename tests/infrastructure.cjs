@@ -1,0 +1,36 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),ts=require('typescript');
+const out=fs.mkdtempSync(path.join(os.tmpdir(),'infrastructure-'));
+try {
+ for(const name of ['validation','infrastructure','siteLinks','physicalPorts','connectionTypes'])fs.writeFileSync(path.join(out,name+'.js'),ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/data',name+'.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText);
+ const {validSite,isNetworkRegister}=require(path.join(out,'validation.js'));
+ const {removeCabinet}=require(path.join(out,'infrastructure.js'));
+ const {clearMissingGateways}=require(path.join(out,'siteLinks.js'));
+ const d=(id)=>({id,hostname:id,deviceType:'Router / Gateway',manufacturer:'',model:'',managementIp:'',subnetVlan:'',macAddress:'',serialNumber:'',connectionType:'Ethernet',physicalLocation:'',switchPort:'',notes:'',lastVerified:'',status:'Known',state:'Current',position:{x:24,y:48}});
+ const a={...d('a'),cabinetId:'rack',mounting:'Rack',rackUnit:3,rackHeight:2};
+ const b={...d('b'),cabinetId:'rack',mounting:'Shelf'};
+ const site={id:'one',name:'One',address:'',description:'',devices:[a,b],connections:[{id:'c',source:'a',target:'b',label:'',connectionType:'Ethernet',state:'Current',status:'Known'}],ipPlan:[],risks:[],plannedImprovements:[],cabinets:[{id:'rack',name:'Cabinet A',room:'Room A',capacity:12,notes:''}]};
+ assert(validSite(site));
+ const changed=patch=>({...site,devices:[{...a,...patch},b]});
+ assert(!validSite(changed({rackUnit:12})));
+ assert(!validSite({...site,devices:[a,{...b,mounting:'Rack',rackUnit:4,rackHeight:1}]}));
+ assert(validSite({...site,devices:[a,{...b,mounting:'Rack',rackUnit:4,rackHeight:1,state:'Future'}]}));
+ assert(!validSite(changed({cabinetId:'missing'})));
+ assert(!validSite(changed({hostDeviceId:'a'})));
+ assert(!validSite({...site,devices:[{...a,hostDeviceId:'b'},{...b,hostDeviceId:'a'}]}));
+ assert(!validSite(changed({mounting:'Virtual'})));
+ assert(validSite(changed({mounting:'Virtual',cabinetId:undefined,rackUnit:undefined,rackHeight:undefined,hostDeviceId:'b'})));
+ const removed=removeCabinet(site,'rack');assert(validSite(removed));assert.equal(removed.devices.length,2);assert.deepEqual(removed.connections,site.connections);assert.deepEqual(removed.devices[0].position,a.position);assert.equal(removed.devices[0].rackUnit,undefined);assert.equal(site.cabinets.length,1);
+ const wan={method:'Bridge',role:'Primary',portId:'dsl',vlanId:'',address:'',gateway:'',dns:''};
+ const modem={...a,operatingMode:'Modem / bridge only',physicalPorts:[{id:'dsl',label:'DSL',role:'DSL',enabled:true,notes:''}],wanInterfaces:[wan]};
+ assert(validSite({...site,devices:[modem,b]}));
+ assert(!validSite({...site,devices:[{...modem,wanInterfaces:[{...wan,vlanId:'4095'}]},b]}));
+ assert(!validSite({...site,devices:[{...modem,physicalPorts:[]},b]}));
+ assert(!validSite(changed({securityFeatures:{ips:{status:'Maybe',details:'',lastVerified:''}}})));
+ const other={...site,id:'two',name:'Two',devices:[d('remote')],connections:[],cabinets:[]};
+ const link={id:'link',sourceSiteId:'one',targetSiteId:'two',name:'Tunnel',technology:'WireGuard',notes:'',status:'Planned',state:'Future',tunnel:{sourceGatewayId:'a',targetGatewayId:'remote',sourceSubnets:'192.168.1.0/24',targetSubnets:'192.168.2.0/24',routing:'Inter-office only',permittedTraffic:'Management only'}};
+ const register={schemaVersion:1,organisation:'Demo',updatedAt:'2026-09-09',sites:[site,other],siteRelationships:[link]};
+ assert(isNetworkRegister(register));assert(isNetworkRegister(JSON.parse(JSON.stringify(register))));
+ const missing={...register,siteRelationships:[{...link,tunnel:{...link.tunnel,targetGatewayId:'absent'}}]};assert(!isNetworkRegister(missing));assert(isNetworkRegister(clearMissingGateways(missing)));
+ assert(isNetworkRegister({...register,sites:register.sites.map(({cabinets,...s})=>({...s,devices:s.devices.map(({cabinetId,mounting,rackUnit,rackHeight,...x})=>x)}))}));
+ console.log('PASS: legacy imports, cabinets, rack bounds/overlaps, host cycles, non-destructive removal, bridge/DSL, WAN and security validation, VPN endpoint references, JSON round trip');
+}finally{fs.rmSync(out,{recursive:true,force:true});}
